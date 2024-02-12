@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 90
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+known_first_party = ["embedding_cluster"]
+
+[mypy]
+warn_return_any = true
+warn_unused_configs = true
