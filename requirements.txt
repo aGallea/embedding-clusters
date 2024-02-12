@@ -1,0 +1,9 @@
+pydantic==2.6.0
+pydantic-settings==2.1.0
+transformers==4.37.2
+chromadb==0.4.22
+aiohttp==3.9.3
+openai==1.11.1
+dash==2.15.0
+torch==2.2.0
+sentence-transformers==2.3.1

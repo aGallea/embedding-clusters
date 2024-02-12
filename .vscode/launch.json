@@ -1,0 +1,125 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Index netflix",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "embedding_cluster",
+      "env": {
+        "RUNNING_MODE": "INDEX",
+        "LOCAL_CSV_FILENAME": "./embedding_cluster/csv/netflix_titles.csv",
+        "ID_FIELD": "show_id",
+        "PROCESS_UNIT_DEVICE": "cpu",
+        "IMAGE_MODEL_NAME": "openai/clip-vit-base-patch32",
+        "_IMAGE_EMBEDDING_FIELDS": "[\"imageurl\"]",
+        "TEXT_MODEL_NAME": "BAAI/bge-small-en-v1.5",
+        "TEXT_EMBEDDING_FIELDS": "[\"description\"]",
+        "CHROMADB_COLLECTION_PREFIX": "netflix_",
+        "NUMBER_OF_ASYNC_TASKS": "1",
+        "INDEX_BULK_SIZE": "10",
+        "justMyCode": "false"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Plot netflix",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "embedding_cluster",
+      "env": {
+        "RUNNING_MODE": "PLOT",
+        "PROCESS_UNIT_DEVICE": "cpu",
+        "CHROMADB_COLLECTION_NAME": "netflix_description",
+        "TEXT_DISPLAY_FIELDS": "[\"show_id\",\"type\",\"title\"]",
+        "NUM_CLUSTERS": "25",
+        "justMyCode": "false"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Index marvel heroes",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "embedding_cluster",
+      "env": {
+        "RUNNING_MODE": "INDEX",
+        "LOCAL_CSV_FILENAME": "./embedding_cluster/csv/marvel_heroes.csv",
+        "ID_FIELD": "charname",
+        "PROCESS_UNIT_DEVICE": "cpu",
+        "IMAGE_MODEL_NAME": "openai/clip-vit-base-patch32",
+        "IMAGE_EMBEDDING_FIELDS": "[\"imageurl\"]",
+        "TEXT_MODEL_NAME": "BAAI/bge-small-en-v1.5",
+        "TEXT_EMBEDDING_FIELDS": "[\"superpowers\", \"types\"]",
+        "NUMBER_OF_ASYNC_TASKS": "1",
+        "INDEX_BULK_SIZE": "10",
+        "justMyCode": "false"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Plot superheroes",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "embedding_cluster",
+      "env": {
+        "RUNNING_MODE": "PLOT",
+        "PROCESS_UNIT_DEVICE": "cpu",
+        "CHROMADB_COLLECTION_NAME": "superpowers",
+        "IMAGE_FIELD": "imageurl",
+        "TEXT_DISPLAY_FIELD": "charname",
+        "NUM_CLUSTERS": "10",
+        "justMyCode": "false"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Index Fashion",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "embedding_cluster",
+      "env": {
+        "csv_source": "https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-dataset",
+        "RUNNING_MODE": "INDEX",
+        "LOCAL_CSV_FILENAME": "./embedding_cluster/csv/fashion_small.csv",
+        "ID_FIELD": "id",
+        "PROCESS_UNIT_DEVICE": "cpu",
+        "IMAGE_MODEL_NAME": "openai/clip-vit-base-patch32",
+        "IMAGE_EMBEDDING_FIELDS": "[\"imageUrl\"]",
+        "TEXT_MODEL_NAME": "BAAI/bge-small-en-v1.5",
+        "_TEXT_EMBEDDING_FIELDS": "[\"productDisplayName\"]",
+        "CHROMADB_COLLECTION_PREFIX": "fashion_",
+        "NUMBER_OF_ASYNC_TASKS": "5",
+        "INDEX_BULK_SIZE": "51",
+        "justMyCode": "false"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Plot Fashion",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "embedding_cluster",
+      "env": {
+        "RUNNING_MODE": "PLOT",
+        "PROCESS_UNIT_DEVICE": "cpu",
+        "CHROMADB_COLLECTION_NAME": "fashion_imageUrl",
+        "TEXT_DISPLAY_FIELDS": "[\"productDisplayName\"]",
+        "IMAGE_FIELD": "imageUrl",
+        "NUM_CLUSTERS": "15",
+        "GPT_GENERATE_CLUSTER_NAME": "true",
+        "justMyCode": "false"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}
