@@ -19,7 +19,6 @@ from embedding_cluster.utils import (
     init_chroma_docs_collection,
 )
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -62,6 +61,7 @@ async def main_indexer():
             )
             curr_rows = []
             chromadb_docs_collections = init_chroma_docs_collection(settings)
+            logger.info(f"Indexed {rows_read} rows")
     if len(curr_rows) > 0:
         await handle(
             settings=settings,
