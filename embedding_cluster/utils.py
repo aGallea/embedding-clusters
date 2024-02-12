@@ -3,6 +3,7 @@ import io
 import logging
 import random
 import string
+import sys
 import time
 from typing import Any, Dict, List, Mapping, Sequence, Union
 
@@ -14,6 +15,36 @@ from pydantic import BaseModel
 from embedding_cluster.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def init_logger():
+    log_handler = logging.StreamHandler(stream=sys.stdout)
+    log_handler.setFormatter(
+        Formatter(
+            fmt="%(asctime)-15s %(levelname)-18.18s %(message)s [%(filename)s:%(lineno)d]"
+        )
+    )
+    logging.root.addHandler(log_handler)
+    logging.root.setLevel(logging.INFO)
+
+
+class Formatter(logging.Formatter):
+    @classmethod
+    def _get_level_color(cls, levelno):
+        default = "\033[0m"
+        return {
+            logging.DEBUG: "\033[0;96m",
+            logging.INFO: "\033[0;92m",
+            logging.WARNING: "\033[0;33m",
+            logging.WARN: "\033[0;33m",
+            logging.ERROR: "\033[0;31m",
+        }.get(levelno, default)
+
+    def format(self, record):
+        record.levelname = (
+            f"{self._get_level_color(record.levelno)}{record.levelname}\033[0m"
+        )
+        return super().format(record)
 
 
 class ChromaDocsCollection(BaseModel):

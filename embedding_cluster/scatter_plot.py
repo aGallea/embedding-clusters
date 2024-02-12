@@ -1,3 +1,4 @@
+import logging
 import random
 from typing import Any, Dict
 
@@ -17,6 +18,7 @@ from embedding_cluster.settings import Settings
 from embedding_cluster.utils import get_or_create_chromadb_collections
 
 # import pandas as pd
+logger = logging.getLogger(__name__)
 
 
 def gpt_get_cluster_name(info: str, settings: Settings):
@@ -85,7 +87,7 @@ def generate_cluster_props(
     for cluster_i in range(num_clusters):
         curr_cluster_indices = [i for i, x in enumerate(pred_arr) if x == cluster_i]
         clusters_indices.append(curr_cluster_indices)
-        print(f"Generating cluster {cluster_i} names ...")
+        logger.info(f"Generating cluster {cluster_i} names ...")
         if settings.gpt_generate_cluster_name is True:
             random_product_indexes = random.sample(
                 range(0, len(curr_cluster_indices)),
@@ -107,7 +109,7 @@ cluster_item_names = []
 
 
 def prepare_data(settings: Settings):
-    print("Preparing data ...")
+    logger.info("Preparing data ...")
     random_state = 171
     n_iter = 1000
     collection_content_images = []
@@ -116,7 +118,7 @@ def prepare_data(settings: Settings):
     global cluster_images
     global cluster_item_names
     collection_content = load_chromadb_collection(settings)
-    print(f"Read {len(collection_content['ids'])} items")
+    logger.info(f"Read {len(collection_content['ids'])} items")
     if settings.image_field is not None:
         collection_content_images = get_field_as_list(
             collection_content["metadatas"], settings.image_field
@@ -128,7 +130,7 @@ def prepare_data(settings: Settings):
     collection_content_vectors = collection_content["embeddings"]
 
     np_embeddings_arr = np.array(collection_content_vectors)
-    print("Calculating t-SNE ...")
+    logger.info("Calculating t-SNE ...")
     tsne = TSNE(
         verbose=1,
         learning_rate="auto",
@@ -145,7 +147,7 @@ def prepare_data(settings: Settings):
     }
     embeddings_standardized = StandardScaler().fit_transform(np_embeddings_arr)
     # embeddings_standardized = StandardScaler().fit_transform(tsne)
-    print("Calculating K-Means ...")
+    logger.info("Calculating K-Means ...")
     pred_arr = KMeans(n_clusters=num_clusters, **common_params).fit_predict(
         embeddings_standardized
     )
@@ -214,7 +216,7 @@ def display_hover(hoverData):
     num = hover_data["pointNumber"]
     cluster = hover_data["curveNumber"]
 
-    # print(f"point number: {num}")
+    # logger.info(f"point number: {num}")
     children = [
         html.Div(
             [
