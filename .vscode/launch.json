@@ -88,7 +88,6 @@
       "request": "launch",
       "module": "embedding_cluster",
       "env": {
-        "csv_source": "https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-dataset",
         "RUNNING_MODE": "INDEX",
         "LOCAL_CSV_FILENAME": "./embedding_cluster/csv/fashion_small.csv",
         "ID_FIELD": "id",
@@ -98,8 +97,8 @@
         "TEXT_MODEL_NAME": "BAAI/bge-small-en-v1.5",
         "_TEXT_EMBEDDING_FIELDS": "[\"productDisplayName\"]",
         "CHROMADB_COLLECTION_PREFIX": "fashion_",
-        "NUMBER_OF_ASYNC_TASKS": "5",
-        "INDEX_BULK_SIZE": "51",
+        "NUMBER_OF_ASYNC_TASKS": "10",
+        "INDEX_BULK_SIZE": "100",
         "justMyCode": "false"
       },
       "console": "integratedTerminal"
