@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     index_bulk_size: int = Field(
         default=100, description="Bulk size when indexing embeddings"
     )
+    index_start_line: Optional[int] = Field(
+        default=None, description="First line number to index"
+    )
+    index_end_line: Optional[int] = Field(
+        default=None, description="Last line number to index"
+    )
     chromadb_collection_prefix: str = Field(
         default="", description="Prefix for the created chromadb collection name"
     )

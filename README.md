@@ -60,6 +60,7 @@ To initiate the indexing process, certain parameters must be provided, which are
 | `TEXT_EMBEDDING_FIELDS` | Name of the text fields to use (from the CSV) as stringify array | False | None |
 | `CHROMADB_COLLECTION_PREFIX` | Prefix for the ChromaDB collection that will be used/created | False | |
 | `NUMBER_OF_ASYNC_TASKS` | Boost your indexing | False | 1 |
+
 Use the next command to index our example:
 
 ```bash
@@ -80,6 +81,7 @@ To execute the plotting process, various parameters need to be specified, allowi
 | `IMAGE_FIELD` | The name of the image property to display when hovering on items (as same as in the CSV) | False | None |
 | `NUM_CLUSTERS` | Number of clusters to create | True | 10 |
 | `GPT_GENERATE_CLUSTER_NAME` | Request GPT to generate cool names to our new created clusters (api_key is required) | FALSE | False |
+
 Use the next command to plot our example:
 
 ```bash
