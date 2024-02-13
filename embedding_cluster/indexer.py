@@ -45,9 +45,24 @@ async def main_indexer():
     text_model_transformer: SentenceTransformer = SentenceTransformer(
         settings.text_model_name
     ).to(settings.process_unit_device)
+
+    skipped_rows = 0
+    if settings.index_start_line is not None:
+        skipped_rows = 1
+        for row in csv_iter:
+            skipped_rows += 1
+            if settings.index_start_line == skipped_rows:
+                break
+            pass
+
     for row in csv_iter:
         rows_read += 1
         curr_rows.append(row)
+        if (
+            settings.index_end_line is not None
+            and settings.index_end_line == rows_read + skipped_rows
+        ):
+            break
         if len(curr_rows) == settings.index_bulk_size:
             await handle(
                 settings=settings,
@@ -61,7 +76,7 @@ async def main_indexer():
             )
             curr_rows = []
             chromadb_docs_collections = init_chroma_docs_collection(settings)
-            logger.info(f"Indexed {rows_read} rows")
+            logger.info(f"Indexed {rows_read} rows. [{skipped_rows + rows_read}]")
     if len(curr_rows) > 0:
         await handle(
             settings=settings,
