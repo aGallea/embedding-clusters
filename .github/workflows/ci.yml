@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
       - run: uv run ruff check embedding_cluster/
       - run: uv run ruff format --check embedding_cluster/
 
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
       - run: uv run mypy embedding_cluster/
 
   test:
@@ -33,5 +33,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
       - run: uv run pytest tests/ -v --cov=embedding_cluster --cov-report=term-missing --cov-fail-under=70
