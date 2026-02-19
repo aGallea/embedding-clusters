@@ -121,30 +121,22 @@ cluster_images: list[list[str]] = []
 cluster_item_names: list[list[str]] = []
 
 
-def prepare_data(settings: Settings) -> go.Figure:
-    logger.info("Preparing data ...")
+def compute_plot_data(settings: Settings) -> dict[str, Any]:
+    """Compute t-SNE + k-means and return raw data (no Plotly/Dash)."""
     random_state = 171
     n_iter = 1000
-    collection_content_images: list[str] = []
     collection_content_text_display: list[str] = []
     num_clusters = settings.num_clusters
-    global cluster_images
-    global cluster_item_names
-    cluster_images = []
-    cluster_item_names = []
+
     collection_content = load_chromadb_collection(settings)
     logger.info("Read %d items", len(collection_content["ids"]))
-    if settings.image_field is not None:
-        collection_content_images = get_field_as_list(
-            collection_content["metadatas"], settings.image_field
-        )
     if settings.text_display_fields is not None:
         collection_content_text_display = create_collection_text_display(
             collection_content["metadatas"], settings.text_display_fields
         )
     collection_content_vectors = collection_content["embeddings"]
-
     np_embeddings_arr = np.array(collection_content_vectors)
+
     logger.info("Calculating t-SNE ...")
     tsne = TSNE(
         verbose=1,
@@ -167,51 +159,112 @@ def prepare_data(settings: Settings) -> go.Figure:
     )
 
     clusters_indices, cluster_names = generate_cluster_props(
-        num_clusters,
-        pred_arr,
-        collection_content_text_display,
-        settings,
+        num_clusters, pred_arr, collection_content_text_display, settings
     )
+
+    # Build structured point data
+    points: list[dict[str, Any]] = []
+    clusters: list[dict[str, Any]] = []
+
+    for cluster_i in range(num_clusters):
+        color = f"hsl({cluster_i * 360 // num_clusters}, 70%, 50%)"
+        clusters.append(
+            {
+                "index": cluster_i,
+                "name": cluster_names[cluster_i],
+                "color": color,
+                "count": len(clusters_indices[cluster_i]),
+            }
+        )
+
+        for idx in clusters_indices[cluster_i]:
+            metadata: dict[str, Any] = {}
+            if idx < len(collection_content["metadatas"]):
+                metadata = dict(collection_content["metadatas"][idx])
+            point_id = (
+                collection_content["ids"][idx]
+                if idx < len(collection_content["ids"])
+                else str(idx)
+            )
+            points.append(
+                {
+                    "x": float(tsne[idx, 0]),
+                    "y": float(tsne[idx, 1]),
+                    "z": float(tsne[idx, 2]),
+                    "cluster": cluster_i,
+                    "metadata": metadata,
+                    "id": point_id,
+                }
+            )
+
+    return {
+        "points": points,
+        "clusters": clusters,
+        "total_points": len(collection_content["ids"]),
+    }
+
+
+def prepare_data(settings: Settings) -> go.Figure:
+    logger.info("Preparing data ...")
+    global cluster_images
+    global cluster_item_names
+    cluster_images = []
+    cluster_item_names = []
+
+    plot_data = compute_plot_data(settings)
+
+    # Rebuild cluster_images and cluster_item_names from plot_data
+    num_clusters = settings.num_clusters
+    # Group points by cluster
+    cluster_points: dict[int, list[dict[str, Any]]] = {}
+    for point in plot_data["points"]:
+        cluster_i = point["cluster"]
+        if cluster_i not in cluster_points:
+            cluster_points[cluster_i] = []
+        cluster_points[cluster_i].append(point)
 
     data: list[go.Scatter3d] = []
     for cluster_i in range(num_clusters):
-        curr_images = [
-            (
-                "https://upload.wikimedia.org/wikipedia/commons/5/5a/Black_question_mark.png"
-                if len(collection_content_images) <= x
-                else collection_content_images[x]
+        c_points = cluster_points.get(cluster_i, [])
+        curr_images = []
+        curr_names = []
+        for p in c_points:
+            img = (
+                p["metadata"].get(
+                    settings.image_field,
+                    "https://upload.wikimedia.org/wikipedia/commons/5/5a/Black_question_mark.png",
+                )
+                if settings.image_field
+                else "https://upload.wikimedia.org/wikipedia/commons/5/5a/Black_question_mark.png"
             )
-            for x in clusters_indices[cluster_i]
-        ]
-        curr_names = [
-            (
-                collection_content_text_display[x]
-                if x < len(collection_content_text_display)
-                else f"Item {x}"
-            )
-            for x in clusters_indices[cluster_i]
-        ]
+            curr_images.append(img)
+            if settings.text_display_fields:
+                name_parts = [
+                    str(p["metadata"].get(f, "")) for f in settings.text_display_fields
+                ]
+                curr_names.append(",".join(name_parts))
+            else:
+                curr_names.append(f"Item {p['id']}")
+
+        cluster_name = next(
+            (c["name"] for c in plot_data["clusters"] if c["index"] == cluster_i),
+            f"Group {cluster_i}",
+        )
         trace = go.Scatter3d(
-            x=np.array([tsne[x, 0] for x in clusters_indices[cluster_i]]),
-            y=np.array([tsne[x, 1] for x in clusters_indices[cluster_i]]),
-            z=np.array([tsne[x, 2] for x in clusters_indices[cluster_i]]),
+            x=np.array([p["x"] for p in c_points]),
+            y=np.array([p["y"] for p in c_points]),
+            z=np.array([p["z"] for p in c_points]),
             mode="markers",
-            name=cluster_names[cluster_i],
+            name=cluster_name,
             showlegend=True,
-            marker=dict(
-                size=5,
-                color=cluster_i,
-            ),
+            marker=dict(size=5, color=cluster_i),
         )
         cluster_images.append(curr_images)
         cluster_item_names.append(curr_names)
         data.append(trace)
-    fig = go.Figure(data=data)
 
-    fig.update_traces(
-        hoverinfo="none",
-        hovertemplate=None,
-    )
+    fig = go.Figure(data=data)
+    fig.update_traces(hoverinfo="none", hovertemplate=None)
     fig.update_layout(
         margin=dict(l=20, r=20, t=20, b=20),
         height=1000,
