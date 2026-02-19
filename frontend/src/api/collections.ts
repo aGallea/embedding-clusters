@@ -1,4 +1,4 @@
-import { CollectionDetail, CollectionInfo, MessageResponse } from "../types";
+import type { CollectionDetail, CollectionInfo, MessageResponse } from "../types";
 import { apiFetch } from "./client";
 
 export async function fetchCollections(): Promise<CollectionInfo[]> {

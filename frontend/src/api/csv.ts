@@ -1,4 +1,4 @@
-import { CsvPreviewResponse, CsvUploadResponse } from "../types";
+import type { CsvPreviewResponse, CsvUploadResponse } from "../types";
 import { apiFetch, apiPost } from "./client";
 
 export async function uploadCsv(file: File): Promise<CsvUploadResponse> {

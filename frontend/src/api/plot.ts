@@ -1,4 +1,4 @@
-import { IndexStartResponse, PlotRequest, PlotResponse } from "../types";
+import type { IndexStartResponse, PlotRequest, PlotResponse } from "../types";
 import { apiFetch, apiPost } from "./client";
 
 export async function startPlotCompute(
