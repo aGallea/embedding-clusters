@@ -8,6 +8,7 @@
 * [Usage](#usage)
   * [Index](#index)
   * [Plot](#plot)
+  * [Web UI (Server Mode)](#web-ui-server-mode)
 * [Contributing](#contributing)
 
 ## Description
@@ -33,6 +34,10 @@ individual items, and obtain insights from the clustering results.
 * Visualize clustering results in a 3D scatter plot using t-SNE.
 * Interactive visualization allows users to hover over items and view
   associated images and names.
+* Web UI with FastAPI backend and React frontend for browser-based
+  indexing and visualization.
+* Three switchable 3D render modes: colored particles, image sprites,
+  and instanced spheres.
 
 ## Installation
 
@@ -120,6 +125,41 @@ RUNNING_MODE=PLOT \
   IMAGE_FIELD=imageUrl \
   uv run python -m embedding_cluster
 ```
+
+### Web UI (Server Mode)
+
+Instead of using environment variables and the CLI, you can run a
+web server with a React-based UI that provides the same indexing and
+visualization features in the browser.
+
+1. Install frontend dependencies and build:
+
+    ```bash
+    cd frontend
+    npm install
+    npm run build
+    cd ..
+    ```
+
+2. Start the server:
+
+    ```bash
+    RUNNING_MODE=SERVER uv run python -m embedding_cluster
+    ```
+
+3. Open <http://localhost:8000> in your browser.
+
+The web UI provides:
+
+* **Index page** -- Upload a CSV, preview it, configure all indexing
+  parameters (model names, embedding fields, collection prefix, etc.),
+  and monitor progress in real time via WebSocket.
+* **Plot page** -- Select a ChromaDB collection, configure clusters
+  and display fields, then visualize in an interactive 3D scatter plot
+  with hover tooltips showing metadata and images. Switch between
+  colored particles, image sprites, and instanced spheres render modes.
+* **Collections page** -- List, inspect, and delete ChromaDB
+  collections.
 
 ## Contributing
 
