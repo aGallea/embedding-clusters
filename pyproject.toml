@@ -1,11 +1,95 @@
-[tool.black]
+[project]
+name = "embedding-cluster"
+version = "0.1.0"
+description = "Generate, index, and visualize embedding clusters from CSV data"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.12,<3",
+    "pydantic-settings>=2.13,<3",
+    "torch>=2.6,<3",
+    "chromadb>=0.6,<1",
+    "transformers>=4.48,<5",
+    "sentence-transformers>=3.4,<4",
+    "dash>=3.4,<4",
+    "plotly>=6.5,<7",
+    "aiohttp>=3.11,<4",
+    "openai>=1.60,<2",
+    "scikit-learn>=1.6,<2",
+    "numpy>=2.2,<3",
+    "Pillow>=11,<12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.25,<1",
+    "pytest-cov>=6,<7",
+    "mypy>=1.14,<2",
+    "ruff>=0.9,<1",
+    "pre-commit>=4,<5",
+]
+
+[tool.ruff]
+target-version = "py313"
 line-length = 90
-target-version = ['py311']
 
-[tool.isort]
-profile = "black"
-known_first_party = ["embedding_cluster"]
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "SIM",
+    "TCH",
+    "RUF",
+]
 
-[mypy]
+[tool.ruff.lint.isort]
+known-first-party = ["embedding_cluster"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "transformers.*",
+    "sentence_transformers.*",
+    "torch.*",
+    "dash.*",
+    "plotly.*",
+    "sklearn.*",
+    "PIL.*",
+    "openai.*",
+    "aiohttp.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+default = true

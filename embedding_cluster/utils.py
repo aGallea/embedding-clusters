@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import io
 import logging
@@ -5,19 +7,23 @@ import random
 import string
 import sys
 import time
-from typing import Any, Dict, List, Mapping, Sequence, Union
+from collections.abc import Mapping, Sequence  # noqa: TC003
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiohttp
-from chromadb.api import ClientAPI, Collection
 from PIL import Image
 from pydantic import BaseModel
 
-from embedding_cluster.settings import Settings
+if TYPE_CHECKING:
+    from chromadb.api import ClientAPI
+    from chromadb.api.models.Collection import Collection
+
+    from embedding_cluster.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
-def init_logger():
+def init_logger() -> None:
     log_handler = logging.StreamHandler(stream=sys.stdout)
     log_handler.setFormatter(
         Formatter(
@@ -30,17 +36,16 @@ def init_logger():
 
 class Formatter(logging.Formatter):
     @classmethod
-    def _get_level_color(cls, levelno):
+    def _get_level_color(cls, levelno: int) -> str:
         default = "\033[0m"
         return {
             logging.DEBUG: "\033[0;96m",
             logging.INFO: "\033[0;92m",
             logging.WARNING: "\033[0;33m",
-            logging.WARN: "\033[0;33m",
             logging.ERROR: "\033[0;31m",
         }.get(levelno, default)
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         record.levelname = (
             f"{self._get_level_color(record.levelno)}{record.levelname}\033[0m"
         )
@@ -48,23 +53,31 @@ class Formatter(logging.Formatter):
 
 
 class ChromaDocsCollection(BaseModel):
-    ids: List[str]
-    embeddings: List[Union[Sequence[float], Sequence[int]]]
-    metadatas: List[Mapping[str, Union[str, int, float, bool]]]
+    ids: list[str]
+    embeddings: list[Sequence[float] | Sequence[int]]
+    metadatas: list[Mapping[str, str | int | float | bool]]
 
 
 class Singleton(type):
-    _instances: Dict[Any, Any] = {}
+    """Metaclass that ensures only one instance per class (thread-unsafe)."""
 
-    def __call__(cls, *args, **kwargs):
+    _instances: ClassVar[dict[Any, Any]] = {}
+
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
         if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+            cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]
 
 
 class ImageDownloader(metaclass=Singleton):
     def __init__(self) -> None:
-        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=100))
+        # Lazy session — created on first download request
+        self.session: aiohttp.ClientSession | None = None
+
+    async def _ensure_session(self) -> None:
+        """Create session lazily to avoid creating it at import time."""
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=100))
 
     async def close_session(self) -> None:
         if self.session:
@@ -76,9 +89,13 @@ class ImageDownloader(metaclass=Singleton):
         await self.close_session()
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=100))
 
-    async def download_image_exp_backoff(self, image_url: str, retries=6):
+    async def download_image_exp_backoff(
+        self, image_url: str, retries: int = 6
+    ) -> Image.Image | None:
         start_time = time.perf_counter()
         delay = 1
+        await self._ensure_session()
+        assert self.session is not None  # ensured by _ensure_session
         while retries > 0:
             try:
                 if image_url is None:
@@ -92,13 +109,18 @@ class ImageDownloader(metaclass=Singleton):
                     image_raw = await resp.read()
                     if retries < 6:
                         logger.info(
-                            f"image download success after {6 - retries} retries, image_url:{image_url}"
+                            "image download success after %d retries, image_url:%s",
+                            6 - retries,
+                            image_url,
                         )
                     image = Image.open(io.BytesIO(image_raw))
-                    took = "{:.3f}".format(time.perf_counter() - start_time)
-                    logger.debug(f"image get took:{took}s, image_url:{image_url}")
+                    took = f"{time.perf_counter() - start_time:.3f}"
+                    logger.debug("image get took:%ss, image_url:%s", took, image_url)
                     return image
-            except (asyncio.TimeoutError, aiohttp.ClientResponseError, ValueError) as e:
+            except (TimeoutError, aiohttp.ClientResponseError, ValueError) as e:
+                # Initialize defaults before the if-chain so they're always set
+                status = 500
+                reason = "Unknown error"
                 if isinstance(e, ValueError):
                     status = 400
                     reason = "Error"
@@ -110,7 +132,7 @@ class ImageDownloader(metaclass=Singleton):
                     reason = str(e)
 
                 log = f"[{retries}] failed to download image: {image_url} Error: {reason}"
-                if status == 429 or status == 403 or status == 408:
+                if status in (429, 403, 408):
                     pass
                 elif 400 <= status < 600:
                     retries = 0
@@ -120,40 +142,47 @@ class ImageDownloader(metaclass=Singleton):
                 if retries > 0:
                     log += f", Retrying in {delay} seconds..."
                     await asyncio.sleep(delay)
-                logger.warn(log)
+                logger.warning(log)
             except Exception as e:
-                logger.warning(f"Failed to download image: {image_url} error: {str(e)}")
+                logger.warning(
+                    "Failed to download image: %s error: %s",
+                    image_url,
+                    str(e),
+                )
                 retries = 0
 
-        took = "{:.3f}".format(time.perf_counter() - start_time)
-        logger.error(f"Failed to download image: {image_url} took:{took}s")
+        took = f"{time.perf_counter() - start_time:.3f}"
+        logger.error("Failed to download image: %s took:%ss", image_url, took)
+        return None
 
 
 def get_or_create_chromadb_collections(
     settings: Settings, chromadb_client: ClientAPI
-) -> Dict[str, Collection]:
-    chromadb_collections = {}
+) -> dict[str, Collection]:
+    chromadb_collections: dict[str, Collection] = {}
     if settings.image_embedding_fields is not None:
         for image_embedding_field in settings.image_embedding_fields:
             collection_name = (
                 f"{settings.chromadb_collection_prefix}{image_embedding_field}"
             )
-            chromadb_collections[
-                collection_name
-            ] = chromadb_client.get_or_create_collection(collection_name)
+            chromadb_collections[collection_name] = (
+                chromadb_client.get_or_create_collection(collection_name)
+            )
     if settings.text_embedding_fields is not None:
         for text_embedding_field in settings.text_embedding_fields:
             collection_name = (
                 f"{settings.chromadb_collection_prefix}{text_embedding_field}"
             )
-            chromadb_collections[
-                collection_name
-            ] = chromadb_client.get_or_create_collection(collection_name)
+            chromadb_collections[collection_name] = (
+                chromadb_client.get_or_create_collection(collection_name)
+            )
     return chromadb_collections
 
 
-def init_chroma_docs_collection(settings: Settings) -> Dict[str, ChromaDocsCollection]:
-    chroma_docs: Dict[str, ChromaDocsCollection] = {}
+def init_chroma_docs_collection(
+    settings: Settings,
+) -> dict[str, ChromaDocsCollection]:
+    chroma_docs: dict[str, ChromaDocsCollection] = {}
     if settings.image_embedding_fields is not None:
         for image_embedding_field in settings.image_embedding_fields:
             chroma_docs[image_embedding_field] = ChromaDocsCollection(
@@ -167,5 +196,7 @@ def init_chroma_docs_collection(settings: Settings) -> Dict[str, ChromaDocsColle
     return chroma_docs
 
 
-def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+def id_generator(
+    size: int = 6, chars: str = string.ascii_uppercase + string.digits
+) -> str:
     return "".join(random.choice(chars) for _ in range(size))

@@ -1,4 +1,4 @@
-from typing import Optional
+from __future__ import annotations
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -16,10 +16,10 @@ class Settings(BaseSettings):
     index_bulk_size: int = Field(
         default=100, description="Bulk size when indexing embeddings"
     )
-    index_start_line: Optional[int] = Field(
+    index_start_line: int | None = Field(
         default=None, description="First line number to index"
     )
-    index_end_line: Optional[int] = Field(
+    index_end_line: int | None = Field(
         default=None, description="Last line number to index"
     )
     chromadb_collection_prefix: str = Field(
@@ -30,39 +30,39 @@ class Settings(BaseSettings):
         default="openai/clip-vit-base-patch32",
         description="Image model to use for embedding images",
     )
-    image_embedding_fields: Optional[list[str]] = Field(
+    image_embedding_fields: list[str] | None = Field(
         default=None, description="Names of the image fields to embed"
     )
     text_model_name: str = Field(
         default="BAAI/bge-small-en-v1.5",
         description="Text model to use for embedding text fields",
     )
-    text_embedding_fields: Optional[list[str]] = Field(
+    text_embedding_fields: list[str] | None = Field(
         default=None, description="Names of the text fields to embed"
     )
     embedding_fields_prefix: str = Field(
-        default="embedding_", description="Prefix for the new created embedding fields"
+        default="embedding_",
+        description="Prefix for the new created embedding fields",
     )
-    id_field: Optional[str] = Field(
+    id_field: str | None = Field(
         default=None,
-        description="field name for the doc id, random id will be generated if not provided",
+        description="field name for the doc id, random id if not provided",
     )
 
     num_clusters: int = Field(default=10, description="Number of plot clusters")
     chromadb_collection_name: str = Field(
         default="", description="chromadb collection name to use for data source"
     )
-    text_display_fields: Optional[list[str]] = Field(
+    text_display_fields: list[str] | None = Field(
         default=None, description="field names for the name to present on plot"
     )
-    image_field: Optional[str] = Field(
+    image_field: str | None = Field(
         default=None, description="field name for the image to present on plot"
     )
 
     gpt_generate_cluster_name: bool = Field(
         default=False, description="Generate cluster names using GPT"
     )
-    # gpt-4-1106-preview / gpt-3.5-turbo
     gpt_default_model: str = Field(default="gpt-3.5-turbo", description="GPT model name")
     gpt_default_temperature: float = Field(
         default=0.51, description="GPT model temperature"

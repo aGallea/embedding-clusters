@@ -1,0 +1,35 @@
+---
+name: CI
+
+"on":
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --all-extras
+      - run: uv run ruff check embedding_cluster/
+      - run: uv run ruff format --check embedding_cluster/
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --all-extras
+      - run: uv run mypy embedding_cluster/
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --all-extras
+      - run: uv run pytest tests/ -v --cov=embedding_cluster --cov-report=term-missing --cov-fail-under=70
