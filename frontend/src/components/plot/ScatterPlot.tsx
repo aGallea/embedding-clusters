@@ -2,6 +2,8 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { usePlotStore } from '../../stores/plotStore'
 import ParticleCloud from './ParticleCloud'
+import ImageSpriteCloud from './ImageSpriteCloud'
+import InstancedSpheres from './InstancedSpheres'
 import TooltipCard from './TooltipCard'
 
 export default function ScatterPlot() {
@@ -18,19 +20,12 @@ export default function ScatterPlot() {
         <OrbitControls makeDefault />
 
         {renderMode === 'particles' && <ParticleCloud />}
-        {/* Placeholders for future modes */}
-        {renderMode === 'sprites' && null}
-        {renderMode === 'spheres' && null}
+        {renderMode === 'sprites' && <ImageSpriteCloud />}
+        {renderMode === 'spheres' && <InstancedSpheres />}
 
         <TooltipCard />
       </Canvas>
 
-      {/* Fallback for empty modes */}
-      {renderMode !== 'particles' && (
-        <div className="absolute top-4 left-4 text-white bg-black/50 px-2 py-1 rounded text-xs pointer-events-none">
-          Mode "{renderMode}" not yet implemented
-        </div>
-      )}
     </div>
   )
 }
