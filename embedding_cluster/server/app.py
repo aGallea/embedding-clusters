@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from embedding_cluster.server.routes.collections import (
     router as collections_router,
 )
+from embedding_cluster.server.routes.csv import router as csv_router
 
 
 def create_app() -> FastAPI:
@@ -26,5 +27,6 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(collections_router)
+    app.include_router(csv_router)
 
     return app

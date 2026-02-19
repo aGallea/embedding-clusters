@@ -16,3 +16,15 @@ class CollectionDetail(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class CsvUploadResponse(BaseModel):
+    filename: str
+    rows: int
+    columns: list[str]
+
+
+class CsvPreviewResponse(BaseModel):
+    columns: list[str]
+    rows: list[dict[str, str]]
+    total_rows: int
