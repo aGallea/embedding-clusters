@@ -51,6 +51,7 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["embedding_cluster"]
+known-third-party = ["chromadb"]
 
 [tool.mypy]
 python_version = "3.13"

@@ -78,7 +78,7 @@ def create_collection_text_display(
 
 def generate_cluster_props(
     num_clusters: int,
-    pred_arr: list[int],
+    pred_arr: Any,
     collection_content_text_display: list[str],
     settings: Settings,
     num_products_for_cluster_name: int = 10,
@@ -100,9 +100,12 @@ def generate_cluster_props(
             )
             curr_descriptions = ""
             for product_index in random_product_indexes:
-                item = collection_content_text_display[
-                    curr_cluster_indices[product_index]
-                ]
+                idx = curr_cluster_indices[product_index]
+                item = (
+                    collection_content_text_display[idx]
+                    if idx < len(collection_content_text_display)
+                    else f"Item {idx}"
+                )
                 curr_descriptions += f"name: {item} \n"
             cluster_name = gpt_get_cluster_name(curr_descriptions, settings)
             cluster_names.append(cluster_name)
@@ -127,6 +130,8 @@ def prepare_data(settings: Settings) -> go.Figure:
     num_clusters = settings.num_clusters
     global cluster_images
     global cluster_item_names
+    cluster_images = []
+    cluster_item_names = []
     collection_content = load_chromadb_collection(settings)
     logger.info("Read %d items", len(collection_content["ids"]))
     if settings.image_field is not None:
@@ -144,7 +149,7 @@ def prepare_data(settings: Settings) -> go.Figure:
     tsne = TSNE(
         verbose=1,
         learning_rate="auto",
-        n_iter=n_iter,
+        max_iter=n_iter,
         perplexity=30,
         n_components=3,
         random_state=random_state,
@@ -179,7 +184,12 @@ def prepare_data(settings: Settings) -> go.Figure:
             for x in clusters_indices[cluster_i]
         ]
         curr_names = [
-            collection_content_text_display[x] for x in clusters_indices[cluster_i]
+            (
+                collection_content_text_display[x]
+                if x < len(collection_content_text_display)
+                else f"Item {x}"
+            )
+            for x in clusters_indices[cluster_i]
         ]
         trace = go.Scatter3d(
             x=np.array([tsne[x, 0] for x in clusters_indices[cluster_i]]),

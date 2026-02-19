@@ -37,15 +37,29 @@ async def main_indexer(settings: Settings) -> None:
         settings, chromadb_client
     )
     sem: asyncio.Semaphore = asyncio.Semaphore(settings.number_of_async_tasks)
-    image_model: CLIPModel = CLIPModel.from_pretrained(settings.image_model_name).to(
-        settings.process_unit_device
-    )
-    image_model_processor: CLIPProcessor = CLIPProcessor.from_pretrained(
-        settings.image_model_name
-    )
-    text_model_transformer: SentenceTransformer = SentenceTransformer(
-        settings.text_model_name
-    ).to(settings.process_unit_device)
+
+    image_model: CLIPModel | None = None
+    image_model_processor: CLIPProcessor | None = None
+    text_model_transformer: SentenceTransformer | None = None
+
+    if (
+        settings.image_embedding_fields is not None
+        and len(settings.image_embedding_fields) > 0
+    ):
+        logger.info("Loading image model: %s", settings.image_model_name)
+        image_model = CLIPModel.from_pretrained(settings.image_model_name).to(
+            settings.process_unit_device
+        )
+        image_model_processor = CLIPProcessor.from_pretrained(settings.image_model_name)
+
+    if (
+        settings.text_embedding_fields is not None
+        and len(settings.text_embedding_fields) > 0
+    ):
+        logger.info("Loading text model: %s", settings.text_model_name)
+        text_model_transformer = SentenceTransformer(settings.text_model_name).to(
+            settings.process_unit_device
+        )
 
     with open(settings.local_csv_filename) as csv_file:
         csv_iter = csv.DictReader(csv_file)
@@ -69,7 +83,7 @@ async def main_indexer(settings: Settings) -> None:
             ):
                 break
             if len(curr_rows) == settings.index_bulk_size:
-                await handle(
+                await _handle_batch(
                     settings=settings,
                     rows=curr_rows,
                     sem=sem,
@@ -81,9 +95,13 @@ async def main_indexer(settings: Settings) -> None:
                 )
                 curr_rows = []
                 chromadb_docs_collections = init_chroma_docs_collection(settings)
-                logger.info("Indexed %d rows. [%d]", rows_read, skipped_rows + rows_read)
+                logger.info(
+                    "Indexed %d rows. [%d]",
+                    rows_read,
+                    skipped_rows + rows_read,
+                )
         if len(curr_rows) > 0:
-            await handle(
+            await _handle_batch(
                 settings=settings,
                 rows=curr_rows,
                 sem=sem,
@@ -95,13 +113,13 @@ async def main_indexer(settings: Settings) -> None:
             )
 
 
-async def handle(
+async def _handle_batch(
     settings: Settings,
     rows: list[Any],
     sem: asyncio.Semaphore,
-    image_model: CLIPModel,
-    image_model_processor: CLIPProcessor,
-    text_model_transformer: SentenceTransformer,
+    image_model: CLIPModel | None,
+    image_model_processor: CLIPProcessor | None,
+    text_model_transformer: SentenceTransformer | None,
     chromadb_docs_collections: dict[str, ChromaDocsCollection],
     chromadb_collections: dict[str, Collection],
 ) -> None:
@@ -141,11 +159,15 @@ async def handle(
                     image_embedding_field,
                 )
                 curr_embedding_val = embeddings.get(embedding_field_name)
-                curr_embedding = (
-                    curr_embedding_val.tolist() if curr_embedding_val is not None else []
-                )
+                if curr_embedding_val is None:
+                    logger.warning(
+                        "Skipping doc %s: missing %s embedding",
+                        ids,
+                        embedding_field_name,
+                    )
+                    continue
                 chromadb_docs_collections[image_embedding_field].embeddings.append(
-                    curr_embedding
+                    curr_embedding_val.tolist()
                 )
                 chromadb_docs_collections[image_embedding_field].metadatas.append(meta)
                 chromadb_docs_collections[image_embedding_field].ids.append(ids)
@@ -161,11 +183,15 @@ async def handle(
                     text_embedding_field,
                 )
                 curr_embedding_val = embeddings.get(embedding_field_name)
-                curr_embedding = (
-                    curr_embedding_val.tolist() if curr_embedding_val is not None else []
-                )
+                if curr_embedding_val is None:
+                    logger.warning(
+                        "Skipping doc %s: missing %s embedding",
+                        ids,
+                        embedding_field_name,
+                    )
+                    continue
                 chromadb_docs_collections[text_embedding_field].embeddings.append(
-                    curr_embedding
+                    curr_embedding_val.tolist()
                 )
                 chromadb_docs_collections[text_embedding_field].metadatas.append(meta)
                 chromadb_docs_collections[text_embedding_field].ids.append(ids)
@@ -197,10 +223,10 @@ async def handle(
 
 
 async def async_wrapper_build_and_encode(
-    image_model: CLIPModel,
-    image_model_processor: CLIPProcessor,
+    image_model: CLIPModel | None,
+    image_model_processor: CLIPProcessor | None,
     image_embedding_fields: list[str] | None,
-    text_model_transformer: SentenceTransformer,
+    text_model_transformer: SentenceTransformer | None,
     text_embedding_fields: list[str] | None,
     embedding_fields_prefix: str,
     source: dict[str, Any],
@@ -227,10 +253,10 @@ async def async_wrapper_build_and_encode(
 
 
 async def build_and_encode(
-    image_model: CLIPModel,
-    image_model_processor: CLIPProcessor,
+    image_model: CLIPModel | None,
+    image_model_processor: CLIPProcessor | None,
     image_embedding_fields: list[str] | None,
-    text_model_transformer: SentenceTransformer,
+    text_model_transformer: SentenceTransformer | None,
     text_embedding_fields: list[str] | None,
     embedding_fields_prefix: str,
     source: dict[str, Any],
@@ -240,6 +266,9 @@ async def build_and_encode(
     _id = id_generator() if id_field is None else source.get(id_field, id_generator())
     embedding: dict[str, Any] = {}
     if image_embedding_fields is not None and len(image_embedding_fields) > 0:
+        if image_model is None or image_model_processor is None:
+            msg = "Image model not loaded but image_embedding_fields specified"
+            raise RuntimeError(msg)
         model_type = "image"
         for image_embedding_field in image_embedding_fields:
             image_url = source.get(image_embedding_field)
@@ -293,6 +322,9 @@ async def build_and_encode(
                         )
                     ] = embedding_image
     if text_embedding_fields is not None and len(text_embedding_fields) > 0:
+        if text_model_transformer is None:
+            msg = "Text model not loaded but text_embedding_fields specified"
+            raise RuntimeError(msg)
         model_type = "text"
         for text_embedding_field in text_embedding_fields:
             text = source.get(text_embedding_field)

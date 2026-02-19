@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     running_mode: str = Field(default="PLOT", description="PLOT/INDEX")
     process_unit_device: str = Field(default="cpu", description="cpu/mps/cuda")
     local_csv_filename: str = Field(
