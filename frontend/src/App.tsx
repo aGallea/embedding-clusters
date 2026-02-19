@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
+import CollectionsPage from './pages/CollectionsPage'
 
 const queryClient = new QueryClient()
 
@@ -21,14 +22,6 @@ function PlotPage() {
   )
 }
 
-function CollectionsPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Collections</h1>
-      <p className="text-gray-600">Manage ChromaDB collections.</p>
-    </div>
-  )
-}
 
 function NavBar() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
