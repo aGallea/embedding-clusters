@@ -7,6 +7,8 @@ from embedding_cluster.server.routes.collections import (
     router as collections_router,
 )
 from embedding_cluster.server.routes.csv import router as csv_router
+from embedding_cluster.server.routes.index import router as index_router
+from embedding_cluster.server.routes.plot import router as plot_router
 
 
 def create_app() -> FastAPI:
@@ -28,5 +30,7 @@ def create_app() -> FastAPI:
 
     app.include_router(collections_router)
     app.include_router(csv_router)
+    app.include_router(index_router)
+    app.include_router(plot_router)
 
     return app
