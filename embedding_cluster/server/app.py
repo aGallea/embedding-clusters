@@ -3,6 +3,10 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from embedding_cluster.server.routes.collections import (
+    router as collections_router,
+)
+
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -20,5 +24,7 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health_check() -> dict[str, str]:
         return {"status": "ok"}
+
+    app.include_router(collections_router)
 
     return app
