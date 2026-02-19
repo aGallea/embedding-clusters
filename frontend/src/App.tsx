@@ -1,17 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
 import CollectionsPage from './pages/CollectionsPage'
+import IndexPage from './pages/IndexPage'
 
 const queryClient = new QueryClient()
-
-function IndexPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Index</h1>
-      <p className="text-gray-600">Upload CSV and start indexing embeddings.</p>
-    </div>
-  )
-}
 
 function PlotPage() {
   return (
