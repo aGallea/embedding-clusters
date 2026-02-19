@@ -150,7 +150,7 @@ def prepare_data(settings: Settings) -> go.Figure:
     tsne = TSNE(
         verbose=1,
         learning_rate="auto",
-        n_iter=n_iter,
+        max_iter=n_iter,
         perplexity=30,
         n_components=3,
         random_state=random_state,
