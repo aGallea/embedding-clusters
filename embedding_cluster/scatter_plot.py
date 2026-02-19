@@ -4,6 +4,7 @@ import logging
 import random
 from typing import TYPE_CHECKING, Any
 
+import chromadb
 import numpy as np
 import plotly.graph_objects as go
 from dash import Dash, Input, Output, callback, dcc, html, no_update
@@ -11,8 +12,6 @@ from openai import OpenAI
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
-
-import chromadb
 
 if TYPE_CHECKING:
     from chromadb.api import ClientAPI

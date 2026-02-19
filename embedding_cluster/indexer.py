@@ -6,11 +6,11 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+import chromadb
 import torch
 from sentence_transformers import SentenceTransformer
 from transformers import CLIPModel, CLIPProcessor
 
-import chromadb
 from embedding_cluster.utils import (
     ChromaDocsCollection,
     ImageDownloader,
