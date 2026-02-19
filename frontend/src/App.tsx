@@ -2,17 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
 import CollectionsPage from './pages/CollectionsPage'
 import IndexPage from './pages/IndexPage'
+import PlotPage from './pages/PlotPage'
 
 const queryClient = new QueryClient()
-
-function PlotPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Plot</h1>
-      <p className="text-gray-600">Visualize embedding clusters in 3D.</p>
-    </div>
-  )
-}
 
 
 function NavBar() {
