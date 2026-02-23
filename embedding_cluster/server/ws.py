@@ -23,14 +23,29 @@ class WebSocketManager:
         self._connections[job_id].remove(websocket)
 
     async def broadcast(self, job_id: str, data: dict[str, Any]) -> None:
-        for ws in self._connections.get(job_id, []):
+        connections = list(self._connections.get(job_id, []))
+        if not connections:
+            return
+
+        failed: list[WebSocket] = []
+        for ws in connections:
             try:
                 await ws.send_text(json.dumps(data))
             except Exception:
+                failed.append(ws)
                 logger.warning(
                     "Failed to send WebSocket message for job %s",
                     job_id,
                 )
+
+        if failed:
+            remaining = [
+                ws for ws in self._connections.get(job_id, []) if ws not in failed
+            ]
+            if remaining:
+                self._connections[job_id] = remaining
+            else:
+                self._connections.pop(job_id, None)
 
 
 ws_manager = WebSocketManager()

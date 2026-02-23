@@ -56,6 +56,7 @@ class TestTaskRegistry:
 
         retrieved = registry.get(task.job_id)
         assert retrieved is task
+        assert retrieved is not None
         assert retrieved.job_id == task.job_id
 
     def test_get_missing_task(self) -> None:
@@ -187,6 +188,25 @@ class TestWebSocketManager:
 
         ws1.send_text.assert_awaited_once()
         ws2.send_text.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_broadcast_removes_failed_connections(self) -> None:
+        manager = WebSocketManager()
+        ws1 = MagicMock()
+        ws1.accept = AsyncMock()
+        ws1.send_text = AsyncMock(side_effect=Exception("Connection closed"))
+        ws2 = MagicMock()
+        ws2.accept = AsyncMock()
+        ws2.send_text = AsyncMock()
+
+        await manager.connect("job-1", ws1)
+        await manager.connect("job-1", ws2)
+
+        data = {"status": "running"}
+        await manager.broadcast("job-1", data)
+
+        assert ws1 not in manager._connections["job-1"]
+        assert ws2 in manager._connections["job-1"]
 
     @pytest.mark.asyncio
     async def test_broadcast_different_jobs(self) -> None:
