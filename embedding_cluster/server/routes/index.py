@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket
@@ -22,13 +23,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/index", tags=["index"])
 
 
+def resolve_csv_path(csv_filename: str) -> Path:
+    candidate = Path(csv_filename)
+    if ".." in candidate.parts:
+        msg = "CSV filename must not contain parent directory references"
+        raise ValueError(msg)
+
+    if candidate.is_absolute():
+        msg = "Absolute CSV paths are not allowed"
+        raise ValueError(msg)
+
+    if candidate.parts[:1] == ("uploads",) or candidate.parts[:2] == (".", "uploads"):
+        return candidate
+
+    return Path("./uploads") / candidate
+
+
 async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
     """Run indexing in background, updating task state and broadcasting progress."""
     try:
         # Construct Settings from IndexRequest
+        try:
+            csv_filename = resolve_csv_path(request.csv_filename)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
         settings = Settings(
             running_mode="INDEX",
-            local_csv_filename=request.csv_filename,
+            local_csv_filename=str(csv_filename),
             id_field=request.id_field,
             image_embedding_fields=request.image_embedding_fields,
             text_embedding_fields=request.text_embedding_fields,
@@ -48,10 +70,38 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
 
         # Define progress callback
         def on_progress(progress_data: dict[str, Any]) -> None:
+            if progress_data.get("total_rows") is None:
+                progress_data["total_rows"] = total_rows
+            progress_data["status"] = task_state.status.value
+            progress_data["type"] = "progress"
             task_state.progress = progress_data
             # Fire and forget broadcast (intentionally not awaited)
             # ruff: noqa: RUF006
             asyncio.create_task(ws_manager.broadcast(task_state.job_id, progress_data))
+
+            rows_indexed = progress_data.get("rows_indexed")
+            if isinstance(rows_indexed, int) and rows_indexed > 0:
+                # ruff: noqa: RUF006
+                asyncio.create_task(
+                    ws_manager.broadcast(
+                        task_state.job_id,
+                        {
+                            "type": "log",
+                            "level": "info",
+                            "message": f"Indexed {rows_indexed} rows",
+                        },
+                    )
+                )
+
+        total_rows = request.total_rows
+        on_progress(
+            {
+                "rows_indexed": 0,
+                "total_rows": total_rows,
+                "errors": 0,
+                "elapsed_seconds": 0,
+            }
+        )
 
         # Run indexer with callback and cancel event
         await main_indexer(
@@ -64,6 +114,17 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
         logger.exception("Indexing failed for job %s", task_state.job_id)
         task_state.status = TaskStatus.FAILED
         task_state.error = str(e)
+        # ruff: noqa: RUF006
+        asyncio.create_task(
+            ws_manager.broadcast(
+                task_state.job_id,
+                {
+                    "status": task_state.status.value,
+                    "error": task_state.error,
+                    "progress": task_state.progress,
+                },
+            )
+        )
 
 
 @router.post("/start", response_model=IndexStartResponse)
@@ -97,6 +158,7 @@ async def get_index_status(job_id: str) -> IndexStatusResponse:
         rows_indexed=rows_indexed,
         total_rows=total_rows,
         errors=errors,
+        error=task.error,
     )
 
 
@@ -133,7 +195,12 @@ async def index_ws(websocket: WebSocket, job_id: str) -> None:
 
         # Send final status
         await ws_manager.broadcast(
-            job_id, {"status": task.status.value, "progress": task.progress}
+            job_id,
+            {
+                "status": task.status.value,
+                "error": task.error,
+                "progress": task.progress,
+            },
         )
     except Exception:
         logger.warning("WebSocket disconnected for job %s", job_id)

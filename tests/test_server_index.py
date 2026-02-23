@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -8,12 +9,33 @@ from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
 from embedding_cluster.server.app import create_app
+from embedding_cluster.server.routes.index import resolve_csv_path
 from embedding_cluster.server.tasks import TaskStatus
 
 
 @pytest.fixture
 def app():
     return create_app()
+
+
+def test_resolve_csv_path_defaults_to_uploads() -> None:
+    assert resolve_csv_path("sample.csv") == Path("./uploads") / "sample.csv"
+
+
+def test_resolve_csv_path_preserves_uploads_prefix() -> None:
+    assert resolve_csv_path("uploads/sample.csv") == Path("uploads/sample.csv")
+    assert resolve_csv_path("./uploads/sample.csv") == Path("./uploads/sample.csv")
+
+
+def test_resolve_csv_path_preserves_absolute_path(tmp_path: Path) -> None:
+    absolute_path = tmp_path / "data.csv"
+    with pytest.raises(ValueError, match="Absolute CSV paths"):
+        resolve_csv_path(str(absolute_path))
+
+
+def test_resolve_csv_path_rejects_parent_traversal() -> None:
+    with pytest.raises(ValueError, match="parent directory"):
+        resolve_csv_path("../secret.csv")
 
 
 @pytest.fixture
@@ -29,12 +51,26 @@ def mock_indexer():
 
     async def fake_indexer(settings, on_progress=None, cancel_event=None):
         if on_progress:
-            on_progress({"rows_indexed": 5, "total_rows": None, "errors": 0})
+            on_progress(
+                {
+                    "rows_indexed": 5,
+                    "total_rows": None,
+                    "errors": 0,
+                    "elapsed_seconds": 0,
+                }
+            )
         await asyncio.sleep(0.1)
         if cancel_event and cancel_event.is_set():
             return
         if on_progress:
-            on_progress({"rows_indexed": 10, "total_rows": None, "errors": 0})
+            on_progress(
+                {
+                    "rows_indexed": 10,
+                    "total_rows": None,
+                    "errors": 0,
+                    "elapsed_seconds": 1,
+                }
+            )
 
     with patch(
         "embedding_cluster.server.routes.index.main_indexer", side_effect=fake_indexer
@@ -98,6 +134,49 @@ async def test_status_success(client, mock_indexer):
     assert "rows_indexed" in data
     assert "total_rows" in data
     assert "errors" in data
+    assert data["error"] is None
+
+
+async def test_status_includes_error_on_failure(client, mock_indexer):
+    async def failing_indexer(settings, on_progress=None, cancel_event=None):
+        raise RuntimeError("boom")
+
+    with patch(
+        "embedding_cluster.server.routes.index.main_indexer", side_effect=failing_indexer
+    ):
+        request_data = {
+            "csv_filename": "./test.csv",
+        }
+
+        start_response = await client.post("/api/index/start", json=request_data)
+        job_id = start_response.json()["job_id"]
+
+        await asyncio.sleep(0.05)
+
+        response = await client.get(f"/api/index/status/{job_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["error"] == "boom"
+
+
+async def test_status_includes_elapsed_seconds(client, mock_indexer):
+    request_data = {
+        "csv_filename": "./test.csv",
+    }
+
+    start_response = await client.post("/api/index/start", json=request_data)
+    job_id = start_response.json()["job_id"]
+
+    await asyncio.sleep(0.15)
+
+    response = await client.get(f"/api/index/status/{job_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["rows_indexed"] in [0, 5, 10]
+    assert data["errors"] == 0
 
 
 async def test_status_not_found(client, mock_indexer):
@@ -118,7 +197,14 @@ async def test_cancel_running_job(client, mock_indexer):
             if cancel_event and cancel_event.is_set():
                 return
             if on_progress:
-                on_progress({"rows_indexed": i, "total_rows": 10, "errors": 0})
+                on_progress(
+                    {
+                        "rows_indexed": i,
+                        "total_rows": 10,
+                        "errors": 0,
+                        "elapsed_seconds": i,
+                    }
+                )
             await asyncio.sleep(0.1)
 
     with patch(

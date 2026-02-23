@@ -46,6 +46,7 @@ class IndexRequest(BaseModel):
     index_end_line: int | None = None
     process_unit_device: str = "cpu"
     embedding_fields_prefix: str = "embedding_"
+    total_rows: int | None = None
 
 
 class IndexStartResponse(BaseModel):
@@ -59,6 +60,7 @@ class IndexStatusResponse(BaseModel):
     rows_indexed: int
     total_rows: int | None
     errors: int
+    error: str | None = None
 
 
 class PlotRequest(BaseModel):
