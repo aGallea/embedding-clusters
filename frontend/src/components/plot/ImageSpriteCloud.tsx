@@ -18,18 +18,20 @@ interface PointSpriteProps {
   point: PlotPoint
   color: string
   imageUrl: string | null
+  size: number
   onHover: (id: string | null) => void
 }
 
-function PointSprite({ point, color, imageUrl, onHover }: PointSpriteProps) {
+function PointSprite({ point, color, imageUrl, size, onHover }: PointSpriteProps) {
   if (imageUrl) {
-    return <TextureSprite point={point} color={color} imageUrl={imageUrl} onHover={onHover} />
+    return <TextureSprite point={point} color={color} imageUrl={imageUrl} size={size} onHover={onHover} />
   }
 
+  const scale = size * 0.2
   return (
     <sprite
       position={[point.x, point.y, point.z]}
-      scale={[0.5, 0.5, 0.5]}
+      scale={[scale, scale, scale]}
       onPointerOver={(e) => {
         e.stopPropagation()
         onHover(point.id)
@@ -41,13 +43,14 @@ function PointSprite({ point, color, imageUrl, onHover }: PointSpriteProps) {
   )
 }
 
-function TextureSprite({ point, imageUrl, onHover }: PointSpriteProps & { imageUrl: string }) {
+function TextureSprite({ point, imageUrl, size, onHover }: PointSpriteProps & { imageUrl: string }) {
   const texture = useTexture(imageUrl)
+  const scale = size * 0.6
 
   return (
     <sprite
       position={[point.x, point.y, point.z]}
-      scale={[2, 2, 2]}
+      scale={[scale, scale, scale]}
       onPointerOver={(e) => {
         e.stopPropagation()
         onHover(point.id)
@@ -64,9 +67,10 @@ function TextureSprite({ point, imageUrl, onHover }: PointSpriteProps & { imageU
   )
 }
 
-function FallbackSprite({ point, color }: { point: PlotPoint; color: string }) {
+function FallbackSprite({ point, color, size }: { point: PlotPoint; color: string; size: number }) {
+  const scale = size * 0.3
   return (
-    <sprite position={[point.x, point.y, point.z]} scale={[1, 1, 1]}>
+    <sprite position={[point.x, point.y, point.z]} scale={[scale, scale, scale]}>
       <spriteMaterial attach="material" color={color} />
     </sprite>
   )
@@ -75,6 +79,7 @@ function FallbackSprite({ point, color }: { point: PlotPoint; color: string }) {
 export default function ImageSpriteCloud() {
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const pointSize = usePlotStore((state) => state.pointSize)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   const visiblePoints = useMemo(() => {
@@ -95,11 +100,12 @@ export default function ImageSpriteCloud() {
   return (
     <group>
       {spritesToRender.map(({ point, color, imageUrl }) => (
-        <Suspense key={point.id} fallback={<FallbackSprite point={point} color={color} />}>
+        <Suspense key={point.id} fallback={<FallbackSprite point={point} color={color} size={pointSize} />}>
           <PointSprite
             point={point}
             color={color}
             imageUrl={imageUrl}
+            size={pointSize}
             onHover={setHoveredPointId}
           />
         </Suspense>

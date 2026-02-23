@@ -7,6 +7,7 @@ export default function InstancedSpheres() {
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const pointSize = usePlotStore((state) => state.pointSize)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   const { filteredPoints, filteredPointIds } = useMemo(() => {
@@ -57,7 +58,7 @@ export default function InstancedSpheres() {
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
-      <sphereGeometry args={[0.15, 16, 16]} />
+      <sphereGeometry args={[pointSize * 0.06, 16, 16]} />
       <meshStandardMaterial vertexColors />
     </instancedMesh>
   )

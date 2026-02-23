@@ -7,6 +7,7 @@ export default function ParticleCloud() {
   const pointsRef = useRef<THREE.Points>(null!)
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const pointSize = usePlotStore((state) => state.pointSize)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   // Memoize positions, colors, and the mapping back to original point IDs
@@ -89,7 +90,7 @@ export default function ParticleCloud() {
         />
       </bufferGeometry>
       <pointsMaterial
-        size={0.05}
+        size={pointSize * 0.1}
         vertexColors
         sizeAttenuation={true}
         transparent={false}

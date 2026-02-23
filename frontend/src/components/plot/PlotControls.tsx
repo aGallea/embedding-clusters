@@ -20,7 +20,7 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
   const [gptModel, setGptModel] = useState('gpt-3.5-turbo')
   const [gptTemperature, setGptTemperature] = useState(0.51)
 
-  const { renderMode, setRenderMode } = usePlotStore()
+  const { renderMode, setRenderMode, pointSize, setPointSize } = usePlotStore()
 
   // 1. Fetch collection list
   const { data: collections } = useQuery({
@@ -206,6 +206,22 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Point Size */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Point Size: {pointSize}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="20"
+              step="1"
+              value={pointSize}
+              onChange={(e) => setPointSize(Number(e.target.value))}
+              className="w-full"
+            />
           </div>
 
           {/* Compute Button */}

@@ -38,6 +38,7 @@ export interface IndexRequest {
   index_end_line?: number;
   process_unit_device?: string;
   embedding_fields_prefix?: string;
+  total_rows?: number;
 }
 
 export interface IndexStartResponse {
@@ -51,6 +52,7 @@ export interface IndexStatusResponse {
   rows_indexed: number;
   total_rows: number | null;
   errors: number;
+  error: string | null;
 }
 
 // Plot

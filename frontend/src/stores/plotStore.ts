@@ -6,11 +6,13 @@ interface PlotState {
   visibleClusters: Set<number>
   hoveredPointId: string | null
   renderMode: 'particles' | 'sprites' | 'spheres'
+  pointSize: number
   // actions
   setPlotData: (data: PlotResponse | null) => void
   toggleCluster: (index: number) => void
   setHoveredPointId: (id: string | null) => void
   setRenderMode: (mode: 'particles' | 'sprites' | 'spheres') => void
+  setPointSize: (size: number) => void
   resetVisibleClusters: (clusterCount: number) => void
 }
 
@@ -26,6 +28,7 @@ export const usePlotStore = create<PlotState>((set) => ({
   visibleClusters: new Set(),
   hoveredPointId: null,
   renderMode: 'particles',
+  pointSize: 5,
 
   setPlotData: (data) => set({ plotData: data }),
 
@@ -43,6 +46,8 @@ export const usePlotStore = create<PlotState>((set) => ({
   setHoveredPointId: (id) => set({ hoveredPointId: id }),
 
   setRenderMode: (mode) => set({ renderMode: mode }),
+
+  setPointSize: (size) => set({ pointSize: size }),
 
   resetVisibleClusters: (clusterCount) =>
     set({
