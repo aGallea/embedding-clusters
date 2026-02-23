@@ -76,6 +76,39 @@ async def test_start_compute_success(app: FastAPI, mock_compute) -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_compute_runs_in_thread(app: FastAPI) -> None:
+    def fake_compute(settings):
+        return {"points": [], "clusters": [], "total_points": 0}
+
+    with (
+        patch(
+            "embedding_cluster.server.routes.plot.compute_plot_data",
+            side_effect=fake_compute,
+        ) as compute,
+        patch("embedding_cluster.server.routes.plot.asyncio.to_thread") as to_thread,
+    ):
+
+        async def fake_to_thread(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        to_thread.side_effect = fake_to_thread
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/plot/compute",
+                json={"chromadb_collection_name": "test_collection"},
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        await asyncio.sleep(0.1)
+
+    to_thread.assert_called_once()
+    compute.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_start_compute_missing_collection(app: FastAPI, mock_compute) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

@@ -33,7 +33,7 @@ async def _run_compute(task_state: TaskState, request: PlotRequest) -> None:
             gpt_default_temperature=request.gpt_default_temperature,
         )
         task_state.status = TaskStatus.RUNNING
-        result = compute_plot_data(settings)
+        result = await asyncio.to_thread(compute_plot_data, settings)
         task_state.result = result
         task_state.status = TaskStatus.COMPLETED
     except Exception as e:
