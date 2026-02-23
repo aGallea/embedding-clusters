@@ -167,3 +167,22 @@ async def test_upload_empty_filename(client, mock_upload_dir):
 
     # Should fail with 400
     assert response.status_code in [400, 422]
+
+
+async def test_upload_csv_rejects_non_csv_extension(client, mock_upload_dir):
+    files = {"file": ("test.txt", b"id,name\n1,test", "text/plain")}
+
+    response = await client.post("/api/csv/upload", files=files)
+
+    assert response.status_code == 400
+
+
+async def test_upload_csv_sanitizes_filename(client, mock_upload_dir, sample_csv_content):
+    files = {"file": ("../evil.csv", sample_csv_content, "text/csv")}
+
+    response = await client.post("/api/csv/upload", files=files)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filename"] == "evil.csv"
+    assert (mock_upload_dir / "evil.csv").exists()

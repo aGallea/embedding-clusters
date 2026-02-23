@@ -28,9 +28,13 @@ async def upload_csv(file: UploadFile) -> CsvUploadResponse:
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
+    safe_name = Path(file.filename).name
+    if not safe_name.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only .csv uploads allowed")
+
     try:
         # Save uploaded file
-        file_path = UPLOAD_DIR / file.filename
+        file_path = UPLOAD_DIR / safe_name
         content = await file.read()
 
         with open(file_path, "wb") as f:
@@ -42,10 +46,10 @@ async def upload_csv(file: UploadFile) -> CsvUploadResponse:
             columns = reader.fieldnames or []
             row_count = sum(1 for _ in reader)
 
-        logger.info(f"Uploaded CSV: {file.filename}, rows: {row_count}")
+        logger.info(f"Uploaded CSV: {safe_name}, rows: {row_count}")
 
         return CsvUploadResponse(
-            filename=file.filename, rows=row_count, columns=list(columns)
+            filename=safe_name, rows=row_count, columns=list(columns)
         )
 
     except csv.Error as e:
@@ -59,7 +63,7 @@ async def upload_csv(file: UploadFile) -> CsvUploadResponse:
 @router.post("/preview", response_model=CsvPreviewResponse)
 async def preview_csv(request: PreviewRequest) -> CsvPreviewResponse:
     """Preview uploaded CSV file with first N rows."""
-    file_path = UPLOAD_DIR / request.filename
+    file_path = UPLOAD_DIR / Path(request.filename).name
 
     if not file_path.exists():
         logger.error(f"File not found: {request.filename}")
@@ -70,13 +74,15 @@ async def preview_csv(request: PreviewRequest) -> CsvPreviewResponse:
             reader = csv.DictReader(f)
             columns = reader.fieldnames or []
 
-            # Read all rows to get total count, but only keep first N
-            all_rows = list(reader)
-            total_rows = len(all_rows)
-            preview_rows = all_rows[: request.limit]
+            preview_rows: list[dict[str, str]] = []
+            total_rows = 0
+            for row in reader:
+                total_rows += 1
+                if len(preview_rows) < request.limit:
+                    preview_rows.append(row)
 
         logger.info(
-            f"Preview CSV: {request.filename}, total: {total_rows}, "
+            f"Preview CSV: {file_path.name}, total: {total_rows}, "
             f"showing: {len(preview_rows)}"
         )
 
