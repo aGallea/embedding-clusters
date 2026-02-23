@@ -67,6 +67,8 @@ async def main_indexer(
             settings.process_unit_device
         )
 
+    start_time = time.perf_counter()
+
     with open(settings.local_csv_filename) as csv_file:
         csv_iter = csv.DictReader(csv_file)
         rows_read = 0
@@ -84,7 +86,7 @@ async def main_indexer(
             if cancel_event is not None and cancel_event.is_set():
                 logger.info("Indexing cancelled at row %d", rows_read + skipped_rows)
                 break
-            rows_read += 1  # noqa: SIM113
+            rows_read += 1
             curr_rows.append(row)
             if (
                 settings.index_end_line is not None
@@ -105,7 +107,14 @@ async def main_indexer(
                 curr_rows = []
                 chromadb_docs_collections = init_chroma_docs_collection(settings)
                 if on_progress is not None:
-                    on_progress({"rows_indexed": rows_read, "total_rows": None})
+                    on_progress(
+                        {
+                            "rows_indexed": rows_read,
+                            "total_rows": None,
+                            "errors": 0,
+                            "elapsed_seconds": time.perf_counter() - start_time,
+                        }
+                    )
                 logger.info(
                     "Indexed %d rows. [%d]",
                     rows_read,
@@ -122,6 +131,15 @@ async def main_indexer(
                 chromadb_docs_collections=chromadb_docs_collections,
                 chromadb_collections=chromadb_collections,
             )
+            if on_progress is not None:
+                on_progress(
+                    {
+                        "rows_indexed": rows_read,
+                        "total_rows": None,
+                        "errors": 0,
+                        "elapsed_seconds": time.perf_counter() - start_time,
+                    }
+                )
 
 
 async def _handle_batch(

@@ -329,6 +329,14 @@ class TestMainIndexer:
             mock_downloader.download_image_exp_backoff = AsyncMock(return_value=None)
             mock_dl_cls.return_value = mock_downloader
 
-            await main_indexer(settings)
+            progress_calls = []
+
+            def on_progress(data: dict[str, float | int | None]) -> None:
+                progress_calls.append(data)
+
+            await main_indexer(settings, on_progress=on_progress)
 
             mock_collection.add.assert_called_once()
+            assert progress_calls
+            for call in progress_calls:
+                assert "elapsed_seconds" in call
