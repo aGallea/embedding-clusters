@@ -4,11 +4,18 @@ import type { IndexRequest } from '../../types';
 interface IndexFormProps {
   columns: string[];
   csvFilename: string;
+  totalRows: number;
   onSubmit: (request: IndexRequest) => void;
   isSubmitting: boolean;
 }
 
-export default function IndexForm({ columns, csvFilename, onSubmit, isSubmitting }: IndexFormProps) {
+export default function IndexForm({
+  columns,
+  csvFilename,
+  totalRows,
+  onSubmit,
+  isSubmitting,
+}: IndexFormProps) {
   const [formData, setFormData] = useState<IndexRequest>({
     csv_filename: csvFilename,
     id_field: undefined,
@@ -23,6 +30,7 @@ export default function IndexForm({ columns, csvFilename, onSubmit, isSubmitting
     index_end_line: undefined,
     process_unit_device: 'cpu',
     embedding_fields_prefix: 'embedding_',
+    total_rows: undefined,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -52,7 +60,10 @@ export default function IndexForm({ columns, csvFilename, onSubmit, isSubmitting
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit({
+      ...formData,
+      total_rows: totalRows,
+    });
   };
 
   const renderSectionHeader = (title: string) => (

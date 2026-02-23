@@ -34,6 +34,7 @@ export default function IndexProgress({ jobId, onDone }: IndexProgressProps) {
     : 0;
 
   const isFinished = status === 'completed' || status === 'failed' || status === 'error' || status === 'cancelled';
+  const displayStatus = status === 'pending' && isConnected ? 'running' : status;
 
   return (
     <div className="space-y-6 bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
@@ -50,15 +51,15 @@ export default function IndexProgress({ jobId, onDone }: IndexProgressProps) {
                Connecting...
              </span>
            )}
-           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
-             ${status === 'completed' ? 'bg-green-100 text-green-800' :
-               status === 'failed' || status === 'error' ? 'bg-red-100 text-red-800' :
-               status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
-               'bg-blue-100 text-blue-800'
-             }
-           `}>
-             {status.charAt(0).toUpperCase() + status.slice(1)}
-           </span>
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+              ${displayStatus === 'completed' ? 'bg-green-100 text-green-800' :
+                displayStatus === 'failed' || displayStatus === 'error' ? 'bg-red-100 text-red-800' :
+                displayStatus === 'cancelled' ? 'bg-gray-100 text-gray-800' :
+                'bg-blue-100 text-blue-800'
+              }
+            `}>
+              {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
+            </span>
         </div>
       </div>
 
@@ -66,7 +67,7 @@ export default function IndexProgress({ jobId, onDone }: IndexProgressProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-3 space-y-2">
           <div className="flex justify-between text-sm font-medium text-gray-900">
-            <span>{progress.rows_indexed} / {progress.total_rows || '?'} rows</span>
+            <span>{progress.rows_indexed} / {progress.total_rows ?? '?'} rows</span>
             <span>{percentage}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -94,7 +95,7 @@ export default function IndexProgress({ jobId, onDone }: IndexProgressProps) {
         <div className="bg-gray-50 p-4 rounded-lg text-center">
             <span className="block text-xs text-gray-500 uppercase">Status</span>
             <span className="block text-lg font-medium text-gray-900 truncate">
-              {status}
+              {displayStatus}
             </span>
         </div>
       </div>
@@ -103,19 +104,26 @@ export default function IndexProgress({ jobId, onDone }: IndexProgressProps) {
       <div>
         <h4 className="text-sm font-medium text-gray-700 mb-2">Live Logs</h4>
         <div className="bg-gray-900 rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs text-gray-300">
-          {logs.length === 0 ? (
+          {logs.length === 0 && !progress.error ? (
             <div className="text-gray-600 italic">Waiting for logs...</div>
           ) : (
-            logs.map((log, index) => (
-              <div key={index} className={`mb-1 ${
-                log.level === 'error' ? 'text-red-400' :
-                log.level === 'warning' ? 'text-yellow-400' :
-                log.level === 'success' ? 'text-green-400' :
-                'text-gray-300'
-              }`}>
-                <span className="opacity-50">[{log.level}]</span> {log.message}
-              </div>
-            ))
+            <>
+              {progress.error && (
+                <div className="mb-2 text-red-400">
+                  <span className="opacity-50">[error]</span> {progress.error}
+                </div>
+              )}
+              {logs.map((log, index) => (
+                <div key={index} className={`mb-1 ${
+                  log.level === 'error' ? 'text-red-400' :
+                  log.level === 'warning' ? 'text-yellow-400' :
+                  log.level === 'success' ? 'text-green-400' :
+                  'text-gray-300'
+                }`}>
+                  <span className="opacity-50">[{log.level}]</span> {log.message}
+                </div>
+              ))}
+            </>
           )}
           <div ref={logsEndRef} />
         </div>

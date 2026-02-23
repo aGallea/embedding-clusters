@@ -6,6 +6,7 @@ export interface IndexProgressData {
   total_rows: number | null;
   errors: number;
   elapsed_seconds: number;
+  error: string | null;
 }
 
 export interface LogMessage {
@@ -31,6 +32,8 @@ interface WebSocketMessage {
   elapsed_seconds?: number;
   collection_names?: string[];
   total_indexed?: number;
+  error?: string;
+  progress?: WebSocketMessage;
   [key: string]: unknown;
 }
 
@@ -40,9 +43,10 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     total_rows: null,
     errors: 0,
     elapsed_seconds: 0,
+    error: null,
   });
   const [logs, setLogs] = useState<LogMessage[]>([]);
-  const [status, setStatus] = useState<string>('connecting');
+  const [status, setStatus] = useState<string>('pending');
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -58,9 +62,10 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
       total_rows: null,
       errors: 0,
       elapsed_seconds: 0,
+      error: null,
     });
     setLogs([]);
-    setStatus('connecting');
+    setStatus('pending');
     setIsConnected(false);
 
     const ws = createIndexWebSocket(jobId);
@@ -69,7 +74,6 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     ws.onopen = () => {
       console.log('WebSocket connected');
       setIsConnected(true);
-      setStatus('connected');
     };
 
     ws.onmessage = (event) => {
@@ -81,6 +85,31 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
             setStatus(data.status);
         }
 
+        if (typeof data.error === 'string') {
+          setProgress(prev => ({
+            ...prev,
+            error: data.error
+          }));
+        }
+
+        if (data.progress && typeof data.progress === 'object') {
+          const progress = data.progress as WebSocketMessage;
+          setProgress(prev => ({
+            ...prev,
+            rows_indexed: typeof progress.rows_indexed === 'number'
+              ? progress.rows_indexed
+              : prev.rows_indexed,
+            total_rows: typeof progress.total_rows === 'number'
+              ? progress.total_rows
+              : prev.total_rows,
+            errors: typeof progress.errors === 'number' ? progress.errors : prev.errors,
+            elapsed_seconds: typeof progress.elapsed_seconds === 'number'
+              ? progress.elapsed_seconds
+              : prev.elapsed_seconds,
+            error: typeof progress.error === 'string' ? progress.error : prev.error,
+          }));
+        }
+
         if (data.type === 'progress' || data.rows_indexed !== undefined) {
           setProgress(prev => ({
             ...prev,
@@ -88,7 +117,11 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
             total_rows: typeof data.total_rows === 'number' ? data.total_rows : prev.total_rows,
             errors: typeof data.errors === 'number' ? data.errors : prev.errors,
             elapsed_seconds: typeof data.elapsed_seconds === 'number' ? data.elapsed_seconds : prev.elapsed_seconds,
+            error: typeof data.error === 'string' ? data.error : prev.error,
           }));
+          if (data.status && data.status !== status) {
+            setStatus(data.status);
+          }
         } else if (data.type === 'log') {
           setLogs(prev => [...prev, {
             level: data.level || 'info',
@@ -106,6 +139,10 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
             level: 'error',
             message: data.message || 'Unknown error occurred'
           }]);
+          setProgress(prev => ({
+            ...prev,
+            error: data.message || prev.error || 'Unknown error occurred'
+          }));
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err);

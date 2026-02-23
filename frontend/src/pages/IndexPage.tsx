@@ -108,11 +108,12 @@ export default function IndexPage() {
              </button>
            </div>
            <IndexForm
-             columns={columns}
-             csvFilename={uploadedFilename}
-             onSubmit={handleIndexSubmit}
-             isSubmitting={startIndexMutation.isPending}
-           />
+              columns={columns}
+              csvFilename={uploadedFilename}
+              totalRows={totalRows}
+              onSubmit={handleIndexSubmit}
+              isSubmitting={startIndexMutation.isPending}
+            />
            {startIndexMutation.isError && (
              <div className="mt-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg border border-red-200">
                Error starting index: {startIndexMutation.error instanceof Error ? startIndexMutation.error.message : 'Unknown error'}
