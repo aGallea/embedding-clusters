@@ -4,40 +4,84 @@
 
 * [Description](#description)
   * [Features](#features)
+  * [Architecture](#architecture)
+  * [Tech Stack](#tech-stack)
 * [Installation](#installation)
 * [Usage](#usage)
-  * [Index](#index)
-  * [Plot](#plot)
+  * [Index (CLI)](#index-cli)
+  * [Plot (CLI)](#plot-cli)
   * [Web UI (Server Mode)](#web-ui-server-mode)
+* [Development](#development)
 * [Contributing](#contributing)
 
 ## Description
 
-This repository contains two Python programs aimed at analyzing and
-visualizing collections of embeddings derived from images and/or text
-using CLIP and transformer models. The first program focuses on
-generating embeddings from input data, while the second program
-processes these embeddings to perform clustering and visualization
-tasks. It indexes these embeddings into ChromaDB and applies k-means
-clustering to group them into a specified number of clusters. The
-resulting clusters are then visualized in a 3D scatter plot using
-t-SNE, enabling users to interactively explore the data, view
-individual items, and obtain insights from the clustering results.
+A full-stack tool for generating, indexing, and visualizing embedding
+clusters from CSV data. Feed it a CSV with image URLs or text fields,
+and it generates vector embeddings using CLIP (images) and
+SentenceTransformer (text) models, stores them in ChromaDB, clusters
+via k-means, and renders an interactive 3D scatter plot using t-SNE
+dimensionality reduction.
+
+The project supports three running modes: CLI-based batch indexing,
+CLI-based Dash visualization, and a full web application with a
+FastAPI backend and React frontend.
 
 ### Features
 
 * Generate embeddings from images and text using CLIP and
-  transformer models.
-* Index embeddings into ChromaDB for efficient retrieval.
-* Perform k-means clustering on embeddings to group them into
-  clusters.
-* Visualize clustering results in a 3D scatter plot using t-SNE.
-* Interactive visualization allows users to hover over items and view
-  associated images and names.
+  SentenceTransformer models.
+* Configurable model selection for both image and text embeddings.
+* Index embeddings into ChromaDB for persistent vector storage.
+* Perform k-means clustering on embeddings with configurable cluster
+  count.
+* Visualize clustering results in an interactive 3D scatter plot
+  using t-SNE dimensionality reduction.
 * Web UI with FastAPI backend and React frontend for browser-based
   indexing and visualization.
 * Three switchable 3D render modes: colored particles, image sprites,
   and instanced spheres.
+* Real-time indexing progress via WebSocket streaming.
+* Hover tooltips showing item metadata and images.
+* Cluster visibility toggling and fullscreen mode.
+* Optional GPT-powered automatic cluster naming via OpenAI API.
+* Collection management (list, inspect, delete) through UI and API.
+* Async batch indexing with configurable parallelism and retry logic.
+* Hardware acceleration support (CPU, MPS, CUDA).
+
+### Architecture
+
+```text
+                    CSV Data
+                       |
+                  [INDEX mode]
+                  /          \
+          CLIP Model    SentenceTransformer
+         (images)           (text)
+                  \          /
+                   ChromaDB
+                  (vector store)
+                       |
+                  [PLOT mode]
+                       |
+            StandardScaler + KMeans
+                       |
+                t-SNE (3D projection)
+                       |
+              3D Scatter Plot
+           (Dash CLI / React Web UI)
+```
+
+### Tech Stack
+
+**Backend:** Python 3.13, FastAPI, ChromaDB, scikit-learn,
+PyTorch, Transformers, aiohttp
+
+**Frontend:** React 19, TypeScript, Three.js (react-three-fiber),
+Zustand, TanStack Query, Tailwind CSS, Vite
+
+**Quality:** mypy (strict), ruff, pytest, GitHub Actions CI,
+pre-commit hooks, commitizen
 
 ## Installation
 
@@ -56,7 +100,7 @@ individual items, and obtain insights from the clustering results.
 
 ## Usage
 
-### Index
+### Index (CLI)
 
 For our primary example, we'll utilize a CSV file sourced from
 [Kaggle's Fashion Product Images Dataset](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-dataset),
@@ -67,7 +111,7 @@ provided, which are customizable according to your needs.
 
 | Parameter | Description | Mandatory | Default |
 |-----------|-------------|-----------|---------|
-| `RUNNING_MODE` | `INDEX` or `PLOT` | Yes | `PLOT` |
+| `RUNNING_MODE` | `INDEX`, `PLOT`, or `SERVER` | Yes | `PLOT` |
 | `LOCAL_CSV_FILENAME` | Path to the CSV file | Yes | |
 | `ID_FIELD` | CSV field name to use as ChromaDB item id | No | Random |
 | `IMAGE_MODEL_NAME` | CLIP model name | No | `openai/clip-vit-base-patch32` |
@@ -76,6 +120,10 @@ provided, which are customizable according to your needs.
 | `TEXT_EMBEDDING_FIELDS` | Text field names (JSON array) | No | None |
 | `CHROMADB_COLLECTION_PREFIX` | Prefix for ChromaDB collection | No | |
 | `NUMBER_OF_ASYNC_TASKS` | Parallel task count | No | `1` |
+| `INDEX_BULK_SIZE` | Batch size when indexing embeddings | No | `100` |
+| `INDEX_START_LINE` | First CSV line number to index | No | None |
+| `INDEX_END_LINE` | Last CSV line number to index | No | None |
+| `PROCESS_UNIT_DEVICE` | Compute device (`cpu`, `mps`, `cuda`) | No | `cpu` |
 
 Index images from the example CSV:
 
@@ -104,19 +152,21 @@ RUNNING_MODE=INDEX \
 > If you only use `TEXT_EMBEDDING_FIELDS`, the CLIP image model is
 > not loaded.
 
-### Plot
+### Plot (CLI)
 
 After successfully indexing data, visualize it. The ChromaDB
 collection name is the prefix combined with the embedded field name.
 
 | Parameter | Description | Mandatory | Default |
 |-----------|-------------|-----------|---------|
-| `RUNNING_MODE` | `INDEX` or `PLOT` | Yes | `PLOT` |
+| `RUNNING_MODE` | `PLOT` | Yes | `PLOT` |
 | `CHROMADB_COLLECTION_NAME` | ChromaDB collection to visualize | Yes | |
 | `TEXT_DISPLAY_FIELDS` | Text fields to show on hover (JSON array) | No | None |
 | `IMAGE_FIELD` | Image field to show on hover | No | None |
 | `NUM_CLUSTERS` | Number of k-means clusters | No | `10` |
 | `GPT_GENERATE_CLUSTER_NAME` | Use GPT to name clusters (needs `OPENAI_API_KEY`) | No | `False` |
+| `GPT_DEFAULT_MODEL` | GPT model for cluster naming | No | `gpt-3.5-turbo` |
+| `GPT_DEFAULT_TEMPERATURE` | GPT temperature for cluster naming | No | `0.51` |
 
 ```bash
 RUNNING_MODE=PLOT \
@@ -161,6 +211,78 @@ The web UI provides:
 * **Collections page** -- List, inspect, and delete ChromaDB
   collections.
 
+## Development
+
+### Prerequisites
+
+* Python 3.13+
+* [uv](https://docs.astral.sh/uv/getting-started/installation/)
+* Node.js 18+ (for frontend development)
+
+### Setup
+
+```bash
+uv sync --all-extras
+uv run pre-commit install --install-hooks -t pre-commit -t commit-msg
+```
+
+### Commands
+
+```bash
+# Lint
+uv run ruff check embedding_cluster/ tests/
+
+# Format
+uv run ruff format embedding_cluster/ tests/
+
+# Type check
+uv run mypy embedding_cluster/
+
+# Run tests
+uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=embedding_cluster --cov-report=term-missing --cov-fail-under=70
+
+# Run all pre-commit hooks
+uv run pre-commit run --all-files
+```
+
+### Project Structure
+
+```text
+embedding_cluster/
+  __main__.py          # Entry point, mode dispatch (INDEX/PLOT/SERVER)
+  settings.py          # Pydantic Settings (env var config)
+  utils.py             # Shared utilities (logging, ChromaDB, image downloader)
+  indexer.py           # INDEX mode: CSV parsing, embedding generation, ChromaDB storage
+  scatter_plot.py      # PLOT mode: clustering, t-SNE, Dash visualization
+  server/
+    app.py             # FastAPI app factory with SPA serving
+    models.py          # Pydantic request/response models
+    tasks.py           # Background task registry
+    ws.py              # WebSocket connection manager
+    routes/
+      collections.py   # Collection CRUD API
+      csv.py           # CSV upload and preview API
+      index.py         # Indexing API with WebSocket progress
+      plot.py          # Plot computation API
+frontend/
+  src/
+    pages/             # IndexPage, PlotPage, CollectionsPage
+    components/        # UI components (plot renderers, forms, etc.)
+    stores/            # Zustand state (plotStore)
+    hooks/             # Custom hooks (usePlotData, useIndexWebSocket)
+    api/               # API client layer
+    types/             # TypeScript interfaces
+tests/
+  test_settings.py     # Settings env var parsing tests
+  test_utils.py        # Utilities and ImageDownloader tests
+  test_indexer.py      # Indexer pipeline tests (mocked ML models)
+  test_scatter_plot.py # Scatter plot tests (mocked data)
+  test_main.py         # Entry point dispatch tests
+```
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue
@@ -171,6 +293,10 @@ On your first contribution, install the pre-commit hooks:
 ```bash
 uv run pre-commit install --install-hooks -t pre-commit -t commit-msg
 ```
+
+Commits follow
+[Conventional Commits](https://www.conventionalcommits.org/)
+format, enforced by commitizen via pre-commit hook.
 
 <!-- MARKDOWN LINKS & IMAGES -->
 [python-version]: https://img.shields.io/badge/python-3.13-blue.svg
