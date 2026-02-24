@@ -7,6 +7,7 @@ name: CI
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   lint:
@@ -30,6 +31,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --frozen --all-extras
-      - run: uv run pytest tests/ -v --cov=embedding_cluster --cov-report=term-missing --cov-fail-under=70
+      - run: >-
+          uv run pytest tests/ -v
+          --cov=embedding_cluster
+          --cov-report=term-missing
+          --cov-report=xml:coverage/cobertura-coverage.xml
+          --junitxml=coverage/junit.xml
+
+      - name: Coverage Report
+        if: always() && github.event_name == 'pull_request'
+        uses: aGallea/tests-coverage-report@1.3.11
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-percentage: '90'
+          fail-under-coverage-percentage: 'true'
