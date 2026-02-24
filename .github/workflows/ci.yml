@@ -42,7 +42,7 @@ jobs:
 
       - name: Coverage Report
         if: always() && github.event_name == 'pull_request'
-        uses: aGallea/tests-coverage-report@v1
+        uses: aGallea/tests-coverage-report@1.3.11
         with:
           min-coverage-percentage: '90'
           fail-under-coverage-percentage: 'true'
