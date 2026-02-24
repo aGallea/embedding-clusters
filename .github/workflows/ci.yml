@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --frozen --all-extras
       - run: >-
@@ -44,5 +46,6 @@ jobs:
         if: always() && github.event_name == 'pull_request'
         uses: aGallea/tests-coverage-report@1.3.11
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-percentage: '90'
           fail-under-coverage-percentage: 'true'
