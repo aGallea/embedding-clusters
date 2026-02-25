@@ -16,11 +16,12 @@ export default function IndexPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [totalRows, setTotalRows] = useState<number>(0);
   const [indexJobId, setIndexJobId] = useState<string | null>(null);
+  const [previewLimit, setPreviewLimit] = useState<number>(10);
 
   // Query for CSV Preview
   const { data: previewData, isLoading: isPreviewLoading } = useQuery({
-    queryKey: ['previewCsv', uploadedFilename],
-    queryFn: () => previewCsv(uploadedFilename!),
+    queryKey: ['previewCsv', uploadedFilename, previewLimit],
+    queryFn: () => previewCsv(uploadedFilename!, previewLimit),
     enabled: !!uploadedFilename && step === 'preview',
   });
 
@@ -79,7 +80,18 @@ export default function IndexPage() {
              </div>
           ) : (
             <>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setStep('upload');
+                    setUploadedFilename(null);
+                    setColumns([]);
+                    setTotalRows(0);
+                  }}
+                  className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Upload Different CSV
+                </button>
                 <button
                   onClick={() => setStep('form')}
                   className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -91,6 +103,8 @@ export default function IndexPage() {
                 columns={columns}
                 rows={previewData?.rows || []}
                 totalRows={totalRows}
+                previewLimit={previewLimit}
+                onLimitChange={setPreviewLimit}
               />
             </>
           )}

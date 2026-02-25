@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createIndexWebSocket } from '../api/indexing';
+
+const STUCK_WARNING_MS = 15_000;
+const STUCK_ERROR_MS = 30_000;
 
 export interface IndexProgressData {
   rows_indexed: number;
@@ -12,6 +15,7 @@ export interface IndexProgressData {
 export interface LogMessage {
   level: string;
   message: string;
+  verbosity: string;
 }
 
 export interface UseIndexWebSocketResult {
@@ -19,6 +23,9 @@ export interface UseIndexWebSocketResult {
   logs: LogMessage[];
   status: string;
   isConnected: boolean;
+  isStuckWarning: boolean;
+  isStuckError: boolean;
+  markCancelled: () => void;
 }
 
 interface WebSocketMessage {
@@ -26,6 +33,7 @@ interface WebSocketMessage {
   status?: string;
   level?: string;
   message?: string;
+  verbosity?: string;
   rows_indexed?: number;
   total_rows?: number | null;
   errors?: number;
@@ -48,8 +56,23 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
   const [logs, setLogs] = useState<LogMessage[]>([]);
   const [status, setStatus] = useState<string>('pending');
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isStuckWarning, setIsStuckWarning] = useState<boolean>(false);
+  const [isStuckError, setIsStuckError] = useState<boolean>(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMessageRef = useRef<number>(Date.now());
+  const stuckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopTimersRef = useRef<(() => void) | null>(null);
+  // Track the last server-reported elapsed_seconds to anchor the client timer
+  const serverElapsedRef = useRef<number>(0);
+  const serverElapsedAtRef = useRef<number>(Date.now());
+
+  const resetStuckTimer = useCallback(() => {
+    lastMessageRef.current = Date.now();
+    setIsStuckWarning(false);
+    setIsStuckError(false);
+  }, []);
 
   useEffect(() => {
     if (!jobId) {
@@ -67,46 +90,101 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     setLogs([]);
     setStatus('pending');
     setIsConnected(false);
+    setIsStuckWarning(false);
+    setIsStuckError(false);
+    serverElapsedRef.current = 0;
+    serverElapsedAtRef.current = Date.now();
+    lastMessageRef.current = Date.now();
+
+    // Helper to stop elapsed timer and stuck detection when indexing finishes
+    const stopTimers = () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (stuckIntervalRef.current) {
+        clearInterval(stuckIntervalRef.current);
+        stuckIntervalRef.current = null;
+      }
+    };
+    stopTimersRef.current = stopTimers;
 
     const ws = createIndexWebSocket(jobId);
     wsRef.current = ws;
 
+    // Client-side elapsed timer — ticks every second for smooth display
+    timerRef.current = setInterval(() => {
+      const now = Date.now();
+      const delta = (now - serverElapsedAtRef.current) / 1000;
+      setProgress(prev => ({
+        ...prev,
+        elapsed_seconds: serverElapsedRef.current + delta,
+      }));
+    }, 1000);
+
+    // Stuck detection interval — checks every 5s
+    stuckIntervalRef.current = setInterval(() => {
+      const silence = Date.now() - lastMessageRef.current;
+      if (silence >= STUCK_ERROR_MS) {
+        setIsStuckError(true);
+        setIsStuckWarning(true);
+      } else if (silence >= STUCK_WARNING_MS) {
+        setIsStuckWarning(true);
+        setIsStuckError(false);
+      } else {
+        setIsStuckWarning(false);
+        setIsStuckError(false);
+      }
+    }, 5000);
+
     ws.onopen = () => {
       console.log('WebSocket connected');
       setIsConnected(true);
+      resetStuckTimer();
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as WebSocketMessage;
+        resetStuckTimer();
+
+        // Sync server elapsed time for client timer anchor
+        if (typeof data.elapsed_seconds === 'number') {
+          serverElapsedRef.current = data.elapsed_seconds;
+          serverElapsedAtRef.current = Date.now();
+        }
 
         // Handle explicit status updates
         if (data.status) {
-            setStatus(data.status);
+          setStatus(data.status);
         }
 
         if (typeof data.error === 'string') {
           setProgress(prev => ({
             ...prev,
-            error: data.error
+            error: data.error as string,
           }));
         }
 
         if (data.progress && typeof data.progress === 'object') {
-          const progress = data.progress as WebSocketMessage;
+          const progressMsg = data.progress as WebSocketMessage;
+          if (typeof progressMsg.elapsed_seconds === 'number') {
+            serverElapsedRef.current = progressMsg.elapsed_seconds;
+            serverElapsedAtRef.current = Date.now();
+          }
           setProgress(prev => ({
             ...prev,
-            rows_indexed: typeof progress.rows_indexed === 'number'
-              ? progress.rows_indexed
+            rows_indexed: typeof progressMsg.rows_indexed === 'number'
+              ? progressMsg.rows_indexed
               : prev.rows_indexed,
-            total_rows: typeof progress.total_rows === 'number'
-              ? progress.total_rows
+            total_rows: typeof progressMsg.total_rows === 'number'
+              ? progressMsg.total_rows
               : prev.total_rows,
-            errors: typeof progress.errors === 'number' ? progress.errors : prev.errors,
-            elapsed_seconds: typeof progress.elapsed_seconds === 'number'
-              ? progress.elapsed_seconds
+            errors: typeof progressMsg.errors === 'number' ? progressMsg.errors : prev.errors,
+            elapsed_seconds: typeof progressMsg.elapsed_seconds === 'number'
+              ? progressMsg.elapsed_seconds
               : prev.elapsed_seconds,
-            error: typeof progress.error === 'string' ? progress.error : prev.error,
+            error: typeof progressMsg.error === 'string' ? progressMsg.error : prev.error,
           }));
         }
 
@@ -125,23 +203,46 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
         } else if (data.type === 'log') {
           setLogs(prev => [...prev, {
             level: data.level || 'info',
-            message: data.message || ''
+            message: data.message || '',
+            verbosity: data.verbosity || 'low',
           }]);
+        } else if (data.type === 'heartbeat') {
+          // Heartbeat keeps stuck detection happy — elapsed already synced above
         } else if (data.type === 'completed') {
           setStatus('completed');
+          stopTimers();
+          // Sync final elapsed time from server
+          if (typeof data.elapsed_seconds === 'number') {
+            setProgress(prev => ({ ...prev, elapsed_seconds: data.elapsed_seconds as number }));
+          }
           setLogs(prev => [...prev, {
             level: 'success',
-            message: `Indexing completed. Total indexed: ${data.total_indexed}. Collections: ${Array.isArray(data.collection_names) ? data.collection_names.join(', ') : ''}`
+            message: `Indexing completed. Total indexed: ${data.total_indexed}. Collections: ${Array.isArray(data.collection_names) ? data.collection_names.join(', ') : ''}`,
+            verbosity: 'low',
+          }]);
+        } else if (data.type === 'cancelled') {
+          setStatus('cancelled');
+          stopTimers();
+          // Sync final elapsed time from server
+          if (typeof data.elapsed_seconds === 'number') {
+            setProgress(prev => ({ ...prev, elapsed_seconds: data.elapsed_seconds as number }));
+          }
+          setLogs(prev => [...prev, {
+            level: 'warning',
+            message: `Indexing cancelled. Rows indexed so far: ${data.total_indexed ?? 0}.`,
+            verbosity: 'low',
           }]);
         } else if (data.type === 'error') {
           setStatus('error');
+          stopTimers();
           setLogs(prev => [...prev, {
             level: 'error',
-            message: data.message || 'Unknown error occurred'
+            message: data.message || 'Unknown error occurred',
+            verbosity: 'low',
           }]);
           setProgress(prev => ({
             ...prev,
-            error: data.message || prev.error || 'Unknown error occurred'
+            error: data.message || prev.error || 'Unknown error occurred',
           }));
         }
       } catch (err) {
@@ -158,8 +259,8 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     ws.onclose = () => {
       console.log('WebSocket disconnected');
       setIsConnected(false);
-      // Don't overwrite 'completed' or 'failed' status on close
-      setStatus(prev => (prev === 'completed' || prev === 'failed' || prev === 'error') ? prev : 'disconnected');
+      // Don't overwrite terminal status on close
+      setStatus(prev => (prev === 'completed' || prev === 'failed' || prev === 'error' || prev === 'cancelled') ? prev : 'disconnected');
     };
 
     return () => {
@@ -167,8 +268,23 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
         wsRef.current.close();
         wsRef.current = null;
       }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (stuckIntervalRef.current) {
+        clearInterval(stuckIntervalRef.current);
+        stuckIntervalRef.current = null;
+      }
     };
-  }, [jobId]);
+  }, [jobId, resetStuckTimer]);
 
-  return { progress, logs, status, isConnected };
+  const markCancelled = useCallback(() => {
+    setStatus('cancelled');
+    setIsStuckWarning(false);
+    setIsStuckError(false);
+    stopTimersRef.current?.();
+  }, []);
+
+  return { progress, logs, status, isConnected, isStuckWarning, isStuckError, markCancelled };
 }
