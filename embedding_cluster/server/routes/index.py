@@ -141,25 +141,43 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
             cancel_event=task_state.cancel_event,
         )
 
-        # Success — send completion message
-        task_state.status = TaskStatus.COMPLETED
         elapsed = time.monotonic() - start_time
-        collection_names = _get_collection_names(settings)
         rows_indexed = task_state.progress.get("rows_indexed", 0)
-        # ruff: noqa: RUF006
-        asyncio.create_task(
-            ws_manager.broadcast(
-                task_state.job_id,
-                {
-                    "type": "completed",
-                    "status": "completed",
-                    "progress": task_state.progress,
-                    "total_indexed": rows_indexed,
-                    "collection_names": collection_names,
-                    "elapsed_seconds": elapsed,
-                },
+
+        # Check if cancelled (cancel_event set by cancel endpoint)
+        if task_state.status == TaskStatus.CANCELLED:
+            logger.info("Indexing cancelled for job %s", task_state.job_id)
+            # ruff: noqa: RUF006
+            asyncio.create_task(
+                ws_manager.broadcast(
+                    task_state.job_id,
+                    {
+                        "type": "cancelled",
+                        "status": "cancelled",
+                        "progress": task_state.progress,
+                        "total_indexed": rows_indexed,
+                        "elapsed_seconds": elapsed,
+                    },
+                )
             )
-        )
+        else:
+            # Success — send completion message
+            task_state.status = TaskStatus.COMPLETED
+            collection_names = _get_collection_names(settings)
+            # ruff: noqa: RUF006
+            asyncio.create_task(
+                ws_manager.broadcast(
+                    task_state.job_id,
+                    {
+                        "type": "completed",
+                        "status": "completed",
+                        "progress": task_state.progress,
+                        "total_indexed": rows_indexed,
+                        "collection_names": collection_names,
+                        "elapsed_seconds": elapsed,
+                    },
+                )
+            )
     except Exception as e:
         logger.exception("Indexing failed for job %s", task_state.job_id)
         task_state.status = TaskStatus.FAILED

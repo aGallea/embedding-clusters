@@ -142,7 +142,7 @@ async def main_indexer(
                     }
                 )
                 await _emit_log(
-                    f"Processing row {rows_read}...",
+                    f"Reading row {rows_read}...",
                     verbosity="high",
                 )
             if (
@@ -168,7 +168,7 @@ async def main_indexer(
                     chromadb_collections=chromadb_collections,
                 )
                 await _emit_log(
-                    f"Batch {batch_num} complete, writing to ChromaDB...",
+                    f"Batch {batch_num} complete",
                     verbosity="medium",
                 )
                 curr_rows = []
@@ -209,7 +209,7 @@ async def main_indexer(
                 chromadb_collections=chromadb_collections,
             )
             await _emit_log(
-                f"Batch {batch_num} complete, writing to ChromaDB...",
+                f"Batch {batch_num} complete",
                 verbosity="medium",
             )
             if on_progress is not None:
