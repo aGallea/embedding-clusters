@@ -97,18 +97,15 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
             asyncio.create_task(ws_manager.broadcast(task_state.job_id, progress_data))
 
         # Define log callback
-        def on_log(message: str, level: str, verbosity: str) -> None:
-            # ruff: noqa: RUF006
-            asyncio.create_task(
-                ws_manager.broadcast(
-                    task_state.job_id,
-                    {
-                        "type": "log",
-                        "level": level,
-                        "message": message,
-                        "verbosity": verbosity,
-                    },
-                )
+        async def on_log(message: str, level: str, verbosity: str) -> None:
+            await ws_manager.broadcast(
+                task_state.job_id,
+                {
+                    "type": "log",
+                    "level": level,
+                    "message": message,
+                    "verbosity": verbosity,
+                },
             )
 
         # Heartbeat background task

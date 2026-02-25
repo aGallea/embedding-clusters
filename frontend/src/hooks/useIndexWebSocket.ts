@@ -94,6 +94,18 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     serverElapsedAtRef.current = Date.now();
     lastMessageRef.current = Date.now();
 
+    // Helper to stop elapsed timer and stuck detection when indexing finishes
+    const stopTimers = () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (stuckIntervalRef.current) {
+        clearInterval(stuckIntervalRef.current);
+        stuckIntervalRef.current = null;
+      }
+    };
+
     const ws = createIndexWebSocket(jobId);
     wsRef.current = ws;
 
@@ -195,6 +207,11 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
           // Heartbeat keeps stuck detection happy — elapsed already synced above
         } else if (data.type === 'completed') {
           setStatus('completed');
+          stopTimers();
+          // Sync final elapsed time from server
+          if (typeof data.elapsed_seconds === 'number') {
+            setProgress(prev => ({ ...prev, elapsed_seconds: data.elapsed_seconds as number }));
+          }
           setLogs(prev => [...prev, {
             level: 'success',
             message: `Indexing completed. Total indexed: ${data.total_indexed}. Collections: ${Array.isArray(data.collection_names) ? data.collection_names.join(', ') : ''}`,
@@ -202,6 +219,7 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
           }]);
         } else if (data.type === 'error') {
           setStatus('error');
+          stopTimers();
           setLogs(prev => [...prev, {
             level: 'error',
             message: data.message || 'Unknown error occurred',

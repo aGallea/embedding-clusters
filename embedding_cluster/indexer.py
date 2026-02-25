@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from chromadb.api import ClientAPI
     from chromadb.api.models.Collection import Collection
@@ -35,16 +35,16 @@ PROGRESS_UPDATE_INTERVAL = 10
 async def main_indexer(
     settings: Settings,
     on_progress: Callable[[dict[str, Any]], None] | None = None,
-    on_log: Callable[[str, str, str], None] | None = None,
+    on_log: Callable[[str, str, str], Awaitable[None]] | None = None,
     cancel_event: asyncio.Event | None = None,
 ) -> None:
-    def _emit_log(
+    async def _emit_log(
         message: str,
         level: str = "info",
         verbosity: str = "low",
     ) -> None:
         if on_log is not None:
-            on_log(message, level, verbosity)
+            await on_log(message, level, verbosity)
 
     chromadb_client: ClientAPI = chromadb.PersistentClient(path="./chromadb")
     chromadb_docs_collections: dict[str, ChromaDocsCollection] = (
@@ -64,17 +64,19 @@ async def main_indexer(
         and len(settings.image_embedding_fields) > 0
     ):
         logger.info("Loading image model: %s", settings.image_model_name)
-        _emit_log(f"Loading image model: {settings.image_model_name}...")
+        await _emit_log(f"Loading image model: {settings.image_model_name}...")
         try:
-            image_model = CLIPModel.from_pretrained(settings.image_model_name).to(
-                settings.process_unit_device
+            image_model = await asyncio.to_thread(
+                lambda: CLIPModel.from_pretrained(settings.image_model_name).to(
+                    settings.process_unit_device
+                )
             )
-            image_model_processor = CLIPProcessor.from_pretrained(
-                settings.image_model_name
+            image_model_processor = await asyncio.to_thread(
+                CLIPProcessor.from_pretrained, settings.image_model_name
             )
-            _emit_log("Image model loaded successfully")
+            await _emit_log("Image model loaded successfully")
         except Exception as exc:
-            _emit_log(
+            await _emit_log(
                 f"Failed to load image model: {exc}",
                 level="error",
             )
@@ -85,14 +87,16 @@ async def main_indexer(
         and len(settings.text_embedding_fields) > 0
     ):
         logger.info("Loading text model: %s", settings.text_model_name)
-        _emit_log(f"Loading text model: {settings.text_model_name}...")
+        await _emit_log(f"Loading text model: {settings.text_model_name}...")
         try:
-            text_model_transformer = SentenceTransformer(settings.text_model_name).to(
-                settings.process_unit_device
+            text_model_transformer = await asyncio.to_thread(
+                lambda: SentenceTransformer(settings.text_model_name).to(
+                    settings.process_unit_device
+                )
             )
-            _emit_log("Text model loaded successfully")
+            await _emit_log("Text model loaded successfully")
         except Exception as exc:
-            _emit_log(
+            await _emit_log(
                 f"Failed to load text model: {exc}",
                 level="error",
             )
@@ -100,10 +104,10 @@ async def main_indexer(
 
     start_time = time.perf_counter()
 
-    _emit_log("Loading CSV file...")
+    await _emit_log("Loading CSV file...")
     with open(settings.local_csv_filename) as csv_file:
         csv_iter = csv.DictReader(csv_file)
-        _emit_log("CSV file opened, reading rows...")
+        await _emit_log("CSV file opened, reading rows...")
         rows_read = 0
         curr_rows: list[dict[str, Any]] = []
         batch_num = 0
@@ -121,7 +125,7 @@ async def main_indexer(
                     "Indexing cancelled at row %d",
                     rows_read + skipped_rows,
                 )
-                _emit_log(
+                await _emit_log(
                     f"Indexing cancelled at row {rows_read + skipped_rows}",
                     level="warning",
                 )
@@ -137,7 +141,7 @@ async def main_indexer(
                         "elapsed_seconds": (time.perf_counter() - start_time),
                     }
                 )
-                _emit_log(
+                await _emit_log(
                     f"Processing row {rows_read}...",
                     verbosity="high",
                 )
@@ -149,7 +153,7 @@ async def main_indexer(
             if len(curr_rows) == settings.index_bulk_size:
                 batch_num += 1
                 batch_start = rows_read - len(curr_rows) + 1
-                _emit_log(
+                await _emit_log(
                     f"Processing batch {batch_num} ({batch_start}-{rows_read})...",
                     verbosity="medium",
                 )
@@ -163,7 +167,7 @@ async def main_indexer(
                     chromadb_docs_collections=chromadb_docs_collections,
                     chromadb_collections=chromadb_collections,
                 )
-                _emit_log(
+                await _emit_log(
                     f"Batch {batch_num} complete, writing to ChromaDB...",
                     verbosity="medium",
                 )
@@ -178,7 +182,7 @@ async def main_indexer(
                             "elapsed_seconds": (time.perf_counter() - start_time),
                         }
                     )
-                _emit_log(
+                await _emit_log(
                     f"Indexed {rows_read} rows so far",
                     verbosity="medium",
                 )
@@ -190,7 +194,7 @@ async def main_indexer(
         if len(curr_rows) > 0:
             batch_num += 1
             batch_start = rows_read - len(curr_rows) + 1
-            _emit_log(
+            await _emit_log(
                 f"Processing batch {batch_num} ({batch_start}-{rows_read})...",
                 verbosity="medium",
             )
@@ -204,7 +208,7 @@ async def main_indexer(
                 chromadb_docs_collections=chromadb_docs_collections,
                 chromadb_collections=chromadb_collections,
             )
-            _emit_log(
+            await _emit_log(
                 f"Batch {batch_num} complete, writing to ChromaDB...",
                 verbosity="medium",
             )
@@ -219,7 +223,7 @@ async def main_indexer(
                 )
 
         elapsed = time.perf_counter() - start_time
-        _emit_log(
+        await _emit_log(
             f"Indexing complete: {rows_read} rows in {elapsed:.1f}s",
             level="success",
         )
