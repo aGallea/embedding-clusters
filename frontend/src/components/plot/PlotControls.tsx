@@ -11,7 +11,7 @@ interface PlotControlsProps {
 }
 
 export default function PlotControls({ onCompute, isComputing }: PlotControlsProps) {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCollection, setSelectedCollection] = useState(searchParams.get('collection') || '')
   const [numClusters, setNumClusters] = useState(10)
   const [textDisplayFields, setTextDisplayFields] = useState<string[]>([])
@@ -80,8 +80,10 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
         <select
           className="w-full border border-gray-300 rounded-md p-2"
           value={selectedCollection}
-          onChange={(e) => setSelectedCollection(e.target.value)}
-        >
+          onChange={(e) => {
+            setSelectedCollection(e.target.value)
+            setSearchParams(e.target.value ? { collection: e.target.value } : {})
+          }}>
           <option value="">Select a collection...</option>
           {collections?.map((c) => (
             <option key={c.name} value={c.name}>

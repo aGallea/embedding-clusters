@@ -8,6 +8,7 @@ export default function ParticleCloud() {
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
+  const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   // Memoize positions, colors, and the mapping back to original point IDs
@@ -29,6 +30,8 @@ export default function ParticleCloud() {
 
     const colorObjects = CLUSTER_COLORS.map(hex => new THREE.Color(hex))
 
+    const hasHighlights = highlightedIds.size > 0
+
     for (let i = 0; i < count; i++) {
       const p = filteredPoints[i]
 
@@ -39,16 +42,17 @@ export default function ParticleCloud() {
 
       // Color
       const color = colorObjects[p.cluster % colorObjects.length]
-      cols[i * 3] = color.r
-      cols[i * 3 + 1] = color.g
-      cols[i * 3 + 2] = color.b
+      const dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      cols[i * 3] = color.r * dimFactor
+      cols[i * 3 + 1] = color.g * dimFactor
+      cols[i * 3 + 2] = color.b * dimFactor
 
       // ID mapping
       ids[i] = p.id
     }
 
     return { positions: pos, colors: cols, filteredPointIds: ids }
-  }, [plotData, visibleClusters])
+  }, [plotData, visibleClusters, highlightedIds])
 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     // Stop event propagation so we don't trigger other things

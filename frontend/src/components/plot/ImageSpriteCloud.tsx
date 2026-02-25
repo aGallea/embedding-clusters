@@ -19,12 +19,13 @@ interface PointSpriteProps {
   color: string
   imageUrl: string | null
   size: number
+  opacity: number
   onHover: (id: string | null) => void
 }
 
-function PointSprite({ point, color, imageUrl, size, onHover }: PointSpriteProps) {
+function PointSprite({ point, color, imageUrl, size, opacity, onHover }: PointSpriteProps) {
   if (imageUrl) {
-    return <TextureSprite point={point} color={color} imageUrl={imageUrl} size={size} onHover={onHover} />
+    return <TextureSprite point={point} color={color} imageUrl={imageUrl} size={size} opacity={opacity} onHover={onHover} />
   }
 
   const scale = size * 0.2
@@ -38,12 +39,12 @@ function PointSprite({ point, color, imageUrl, size, onHover }: PointSpriteProps
       }}
       onPointerOut={() => onHover(null)}
     >
-      <spriteMaterial attach="material" color={color} />
+      <spriteMaterial attach="material" color={color} transparent opacity={opacity} />
     </sprite>
   )
 }
 
-function TextureSprite({ point, imageUrl, size, onHover }: PointSpriteProps & { imageUrl: string }) {
+function TextureSprite({ point, imageUrl, size, opacity, onHover }: PointSpriteProps & { imageUrl: string }) {
   const texture = useTexture(imageUrl)
   const scale = size * 0.6
 
@@ -62,6 +63,7 @@ function TextureSprite({ point, imageUrl, size, onHover }: PointSpriteProps & { 
         map={texture}
         color={'white'}
         transparent={true}
+        opacity={opacity}
       />
     </sprite>
   )
@@ -80,6 +82,7 @@ export default function ImageSpriteCloud() {
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
+  const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   const visiblePoints = useMemo(() => {
@@ -91,21 +94,24 @@ export default function ImageSpriteCloud() {
     return visiblePoints.slice(0, MAX_SPRITES).map((point) => {
       const color = CLUSTER_COLORS[point.cluster % CLUSTER_COLORS.length]
       const imageUrl = getImageUrl(point.metadata)
-      return { point, color, imageUrl }
+      const isHighlighted = highlightedIds.size === 0 || highlightedIds.has(point.id)
+      const opacity = isHighlighted ? 1.0 : 0.15
+      return { point, color, imageUrl, opacity }
     })
-  }, [visiblePoints])
+  }, [visiblePoints, highlightedIds])
 
   if (!plotData) return null
 
   return (
     <group>
-      {spritesToRender.map(({ point, color, imageUrl }) => (
+      {spritesToRender.map(({ point, color, imageUrl, opacity }) => (
         <Suspense key={point.id} fallback={<FallbackSprite point={point} color={color} size={pointSize} />}>
           <PointSprite
             point={point}
             color={color}
             imageUrl={imageUrl}
             size={pointSize}
+            opacity={opacity}
             onHover={setHoveredPointId}
           />
         </Suspense>
