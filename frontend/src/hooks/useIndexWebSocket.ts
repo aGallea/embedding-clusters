@@ -25,6 +25,7 @@ export interface UseIndexWebSocketResult {
   isConnected: boolean;
   isStuckWarning: boolean;
   isStuckError: boolean;
+  markCancelled: () => void;
 }
 
 interface WebSocketMessage {
@@ -62,6 +63,7 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMessageRef = useRef<number>(Date.now());
   const stuckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopTimersRef = useRef<(() => void) | null>(null);
   // Track the last server-reported elapsed_seconds to anchor the client timer
   const serverElapsedRef = useRef<number>(0);
   const serverElapsedAtRef = useRef<number>(Date.now());
@@ -105,6 +107,7 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
         stuckIntervalRef.current = null;
       }
     };
+    stopTimersRef.current = stopTimers;
 
     const ws = createIndexWebSocket(jobId);
     wsRef.current = ws;
@@ -217,6 +220,18 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
             message: `Indexing completed. Total indexed: ${data.total_indexed}. Collections: ${Array.isArray(data.collection_names) ? data.collection_names.join(', ') : ''}`,
             verbosity: 'low',
           }]);
+        } else if (data.type === 'cancelled') {
+          setStatus('cancelled');
+          stopTimers();
+          // Sync final elapsed time from server
+          if (typeof data.elapsed_seconds === 'number') {
+            setProgress(prev => ({ ...prev, elapsed_seconds: data.elapsed_seconds as number }));
+          }
+          setLogs(prev => [...prev, {
+            level: 'warning',
+            message: `Indexing cancelled. Rows indexed so far: ${data.total_indexed ?? 0}.`,
+            verbosity: 'low',
+          }]);
         } else if (data.type === 'error') {
           setStatus('error');
           stopTimers();
@@ -244,8 +259,8 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     ws.onclose = () => {
       console.log('WebSocket disconnected');
       setIsConnected(false);
-      // Don't overwrite 'completed' or 'failed' status on close
-      setStatus(prev => (prev === 'completed' || prev === 'failed' || prev === 'error') ? prev : 'disconnected');
+      // Don't overwrite terminal status on close
+      setStatus(prev => (prev === 'completed' || prev === 'failed' || prev === 'error' || prev === 'cancelled') ? prev : 'disconnected');
     };
 
     return () => {
@@ -264,5 +279,12 @@ export function useIndexWebSocket(jobId: string | null): UseIndexWebSocketResult
     };
   }, [jobId, resetStuckTimer]);
 
-  return { progress, logs, status, isConnected, isStuckWarning, isStuckError };
+  const markCancelled = useCallback(() => {
+    setStatus('cancelled');
+    setIsStuckWarning(false);
+    setIsStuckError(false);
+    stopTimersRef.current?.();
+  }, []);
+
+  return { progress, logs, status, isConnected, isStuckWarning, isStuckError, markCancelled };
 }

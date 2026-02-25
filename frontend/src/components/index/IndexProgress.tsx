@@ -19,12 +19,13 @@ interface IndexProgressProps {
 }
 
 export default function IndexProgress({ jobId, onDone }: IndexProgressProps) {
-  const { progress, logs, status, isConnected, isStuckWarning, isStuckError } = useIndexWebSocket(jobId);
+  const { progress, logs, status, isConnected, isStuckWarning, isStuckError, markCancelled } = useIndexWebSocket(jobId);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [verbosity, setVerbosity] = useState<VerbosityLevel>('medium');
 
   const cancelMutation = useMutation({
     mutationFn: cancelIndex,
+    onSuccess: () => markCancelled(),
   });
 
   const filteredLogs = useMemo(() => {
