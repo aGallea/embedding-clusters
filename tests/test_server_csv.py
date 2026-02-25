@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -186,3 +186,93 @@ async def test_upload_csv_sanitizes_filename(client, mock_upload_dir, sample_csv
     data = response.json()
     assert data["filename"] == "evil.csv"
     assert (mock_upload_dir / "evil.csv").exists()
+
+
+async def test_upload_csv_error_on_upload(client, mock_upload_dir):
+    """Test csv.Error during upload when reading metadata (lines 55-60)."""
+    valid_csv_content = b"id,name\n1,Product A\n2,Product B"
+    files = {"file": ("error_test.csv", valid_csv_content, "text/csv")}
+
+    # Patch csv.DictReader to raise csv.Error after file is saved
+    with patch("csv.DictReader") as mock_reader:
+        mock_reader.side_effect = __import__("csv").Error("bad CSV format")
+        response = await client.post("/api/csv/upload", files=files)
+
+    # Should fail with 400 and proper error message
+    assert response.status_code == 400
+    data = response.json()
+    assert "Invalid CSV format" in data["detail"]
+
+
+async def test_preview_csv_error_on_preview(client, sample_csv_content, mock_upload_dir):
+    """Test csv.Error during preview when reading file (lines 93-98)."""
+    # First upload a valid CSV
+    files = {"file": ("preview_error_test.csv", sample_csv_content, "text/csv")}
+    upload_response = await client.post("/api/csv/upload", files=files)
+    assert upload_response.status_code == 200
+
+    # Now patch csv.DictReader to raise csv.Error when previewing
+    with patch("csv.DictReader") as mock_reader:
+        mock_reader.side_effect = __import__("csv").Error("bad CSV format")
+        preview_request = {"filename": "preview_error_test.csv", "limit": 10}
+        response = await client.post("/api/csv/preview", json=preview_request)
+
+    # Should fail with 400 and proper error message
+    assert response.status_code == 400
+    data = response.json()
+    assert "Invalid CSV format" in data["detail"]
+
+
+async def test_preview_csv_general_exception(client, sample_csv_content, mock_upload_dir):
+    """Test general Exception during preview (lines 96-98)."""
+    # First upload a valid CSV
+    files = {"file": ("exception_test.csv", sample_csv_content, "text/csv")}
+    upload_response = await client.post("/api/csv/upload", files=files)
+    assert upload_response.status_code == 200
+
+    # Now patch csv.DictReader to raise a general exception when previewing
+    with patch("csv.DictReader") as mock_reader:
+        mock_reader.side_effect = RuntimeError("unexpected error")
+        preview_request = {"filename": "exception_test.csv", "limit": 10}
+        response = await client.post("/api/csv/preview", json=preview_request)
+
+    # Should fail with 500 and proper error message
+    assert response.status_code == 500
+    data = response.json()
+    assert "Error reading file" in data["detail"]
+
+
+async def test_upload_csv_general_exception(client, mock_upload_dir):
+    """Test general Exception during upload (lines 58-60)."""
+    valid_csv_content = b"id,name\n1,Product A\n2,Product B"
+    files = {"file": ("upload_exception_test.csv", valid_csv_content, "text/csv")}
+
+    # Patch open() to raise an exception when reading the CSV
+    with patch("builtins.open", side_effect=RuntimeError("file read error")):
+        response = await client.post("/api/csv/upload", files=files)
+
+    # Should fail with 500 and proper error message
+    assert response.status_code == 500
+    data = response.json()
+    assert "Error processing file" in data["detail"]
+
+
+async def test_upload_csv_no_filename_direct():
+    """Test upload handler with None filename (line 29)."""
+
+    from fastapi import HTTPException
+
+    from embedding_cluster.server.routes.csv import upload_csv
+
+    # Create an UploadFile with empty filename
+    mock_file = AsyncMock()
+    mock_file.filename = ""
+    mock_file.read = AsyncMock(return_value=b"test")
+
+    # Call the handler directly
+    with pytest.raises(HTTPException) as exc_info:
+        await upload_csv(mock_file)
+
+    # Verify it's a 400 error
+    assert exc_info.value.status_code == 400
+    assert "No filename provided" in exc_info.value.detail

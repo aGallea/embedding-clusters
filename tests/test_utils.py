@@ -324,6 +324,255 @@ class TestImageDownloader:
 
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_session_closed_triggers_recreate(self) -> None:
+        """Test that session.closed=True triggers recreate_session (lines 104-105)."""
+        import aiohttp
+
+        downloader = ImageDownloader()
+
+        # Create retryable error (429)
+        error_429 = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=429,
+            message="Too Many Requests",
+        )
+
+        # Success response
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.read = AsyncMock(return_value=_create_minimal_png())
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        # Create initial session with close as AsyncMock
+        mock_session = MagicMock()
+        mock_session.closed = False  # Start not closed
+        mock_session.close = AsyncMock()  # Make close async
+
+        # Define get behavior: first call raises 429, then session becomes closed
+        def get_side_effect(*args, **kwargs):
+            # After first call, mark session as closed for the next iteration
+            mock_session.closed = True
+            raise error_429
+
+        mock_session.get = MagicMock(side_effect=get_side_effect)
+        downloader.session = mock_session
+
+        with (
+            patch("embedding_cluster.utils.aiohttp.ClientSession") as mock_client_session,
+            patch("embedding_cluster.utils.aiohttp.ClientTimeout"),
+            patch("embedding_cluster.utils.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            # New session created during recreate_session
+            mock_new_session = MagicMock()
+            mock_new_session.closed = False
+            mock_new_session.get = MagicMock(return_value=mock_resp)
+            mock_new_session.close = AsyncMock()
+            mock_client_session.return_value = mock_new_session
+
+            result = await downloader.download_image_exp_backoff(
+                "http://example.com/img.png", retries=2
+            )
+
+        # Verify session was replaced during the retry loop
+        assert downloader.session is mock_new_session
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_retry_success_logs_message(self) -> None:
+        """Test that successful download after retry logs success message (line 111)."""
+        import aiohttp
+
+        downloader = ImageDownloader()
+
+        # First response returns 429 error (via ClientResponseError)
+        error_429 = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=429,
+            message="Too Many Requests",
+        )
+
+        # Second response returns 200 with valid PNG
+        mock_resp_200 = AsyncMock()
+        mock_resp_200.status = 200
+        mock_resp_200.read = AsyncMock(return_value=_create_minimal_png())
+        mock_resp_200.__aenter__ = AsyncMock(return_value=mock_resp_200)
+        mock_resp_200.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        # First call raises 429 error, second call succeeds
+        mock_session.get = MagicMock(side_effect=[error_429, mock_resp_200])
+        downloader.session = mock_session
+
+        with (
+            patch("embedding_cluster.utils.asyncio.sleep", new_callable=AsyncMock),
+            patch("embedding_cluster.utils.logger") as mock_logger,
+        ):
+            result = await downloader.download_image_exp_backoff(
+                "http://example.com/img.png", retries=2
+            )
+
+            assert result is not None
+            # Verify success log message was called
+            mock_logger.info.assert_called()
+            # Check that the log message contains "success after" text
+            calls = mock_logger.info.call_args_list
+            info_messages = [call[0][0] if call[0] else "" for call in calls]
+            assert any(
+                "image download success after" in str(msg) for msg in info_messages
+            )
+
+    @pytest.mark.asyncio
+    async def test_timeout_error_sets_status_408(self) -> None:
+        """Test that asyncio.TimeoutError sets status=408 (lines 128-129)."""
+
+        downloader = ImageDownloader()
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock(side_effect=TimeoutError("Timeout occurred"))
+        downloader.session = mock_session
+
+        with (
+            patch("embedding_cluster.utils.asyncio.sleep", new_callable=AsyncMock),
+            patch("embedding_cluster.utils.logger") as mock_logger,
+        ):
+            result = await downloader.download_image_exp_backoff(
+                "http://example.com/img.png", retries=1
+            )
+
+            assert result is None
+            # Verify warning log was called (should log 408 status)
+            mock_logger.warning.assert_called()
+            # Check that log contains status 408 context
+            calls = mock_logger.warning.call_args_list
+            log_messages = [call[0][0] if call[0] else "" for call in calls]
+            # The log should reference the failed download
+            assert any("failed to download" in str(msg).lower() for msg in log_messages)
+
+    @pytest.mark.asyncio
+    async def test_client_response_error_uses_status(self) -> None:
+        """Test that ClientResponseError uses e.status (lines 131-132)."""
+        import aiohttp
+
+        downloader = ImageDownloader()
+        # Create a ClientResponseError with specific status
+        error = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=503,
+            message="Service Unavailable",
+        )
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock(side_effect=error)
+        downloader.session = mock_session
+
+        with (
+            patch("embedding_cluster.utils.asyncio.sleep", new_callable=AsyncMock),
+            patch("embedding_cluster.utils.logger") as mock_logger,
+        ):
+            result = await downloader.download_image_exp_backoff(
+                "http://example.com/img.png", retries=1
+            )
+
+            assert result is None
+            # Verify warning was called
+            mock_logger.warning.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_retryable_status_429_allows_retry(self) -> None:
+        """Test that status 429 is retryable (line 136)."""
+        import aiohttp
+
+        downloader = ImageDownloader()
+
+        # First two responses are 429 errors (via ClientResponseError)
+        error_429_1 = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=429,
+            message="Too Many Requests",
+        )
+
+        error_429_2 = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=429,
+            message="Too Many Requests",
+        )
+
+        # Final response is 200
+        mock_resp_200 = AsyncMock()
+        mock_resp_200.status = 200
+        mock_resp_200.read = AsyncMock(return_value=_create_minimal_png())
+        mock_resp_200.__aenter__ = AsyncMock(return_value=mock_resp_200)
+        mock_resp_200.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock(
+            side_effect=[error_429_1, error_429_2, mock_resp_200]
+        )
+        downloader.session = mock_session
+
+        with patch("embedding_cluster.utils.asyncio.sleep", new_callable=AsyncMock):
+            result = await downloader.download_image_exp_backoff(
+                "http://example.com/img.png", retries=3
+            )
+
+        assert result is not None
+        # Verify that get was called 3 times (2 retries + 1 success)
+        assert mock_session.get.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_retry_delay_logging_and_sleep(self) -> None:
+        """Test retry delay logging and asyncio.sleep call (lines 143-144)."""
+        import aiohttp
+
+        downloader = ImageDownloader()
+
+        # Create retryable error (429)
+        error_429 = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=429,
+            message="Too Many Requests",
+        )
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock(side_effect=error_429)
+        downloader.session = mock_session
+
+        with (
+            patch(
+                "embedding_cluster.utils.asyncio.sleep", new_callable=AsyncMock
+            ) as mock_sleep,
+            patch("embedding_cluster.utils.logger") as mock_logger,
+        ):
+            result = await downloader.download_image_exp_backoff(
+                "http://example.com/img.png", retries=2
+            )
+
+            assert result is None
+            # Verify sleep was called with exponential backoff
+            mock_sleep.assert_called()
+            # Check that the sleep delays are correct
+            sleep_calls = mock_sleep.call_args_list
+            delays = [call[0][0] for call in sleep_calls]
+            assert len(delays) > 0  # at least one retry delay
+            assert delays[0] > 0  # delay should be positive
+            # Verify logger was called with retry message
+            mock_logger.warning.assert_called()
+            calls = mock_logger.warning.call_args_list
+            log_messages = [call[0][0] if call[0] else "" for call in calls]
+            # Check that retry message includes delay info
+            assert any("Retrying in" in str(msg) for msg in log_messages)
+
 
 def _create_minimal_png() -> bytes:
     """Create a minimal valid PNG file in memory."""

@@ -456,3 +456,152 @@ async def test_search_fallback_when_no_metadata(
     assert response.status_code == 200
     # Should fall back to default text model name from request
     mock_get_text.assert_called_with("BAAI/bge-small-en-v1.5")
+
+
+def test_get_chromadb_client():
+    """Test _get_chromadb_client() calls chromadb.PersistentClient with correct path."""
+    from embedding_cluster.server.routes.search import _get_chromadb_client
+
+    with patch(
+        "embedding_cluster.server.routes.search.chromadb.PersistentClient"
+    ) as mock_persistent:
+        mock_client = MagicMock()
+        mock_persistent.return_value = mock_client
+
+        result = _get_chromadb_client()
+
+        # Verify PersistentClient was called with correct path
+        mock_persistent.assert_called_once_with(path="./chromadb")
+        # Verify return value is the mock client
+        assert result == mock_client
+
+
+def test_get_text_model_cache_miss():
+    """Test _get_text_model() loads SentenceTransformer on cache miss."""
+    from embedding_cluster.server.routes.search import (
+        _get_text_model,
+        _model_cache,
+    )
+
+    # Clear cache before test
+    _model_cache.clear()
+
+    with patch(
+        "embedding_cluster.server.routes.search.SentenceTransformer"
+    ) as mock_sentence_transformer:
+        mock_model_instance = MagicMock()
+        mock_sentence_transformer.return_value = mock_model_instance
+
+        result = _get_text_model("test-model")
+
+        # Verify SentenceTransformer was called with model name
+        mock_sentence_transformer.assert_called_once_with("test-model")
+        # Verify return value is the mock instance
+        assert result == mock_model_instance
+        # Verify cache now contains the key
+        assert "text:test-model" in _model_cache
+        assert _model_cache["text:test-model"] == mock_model_instance
+
+    # Clean up
+    _model_cache.clear()
+
+
+def test_get_text_model_cache_hit():
+    """Test _get_text_model() uses cached model on cache hit."""
+    from embedding_cluster.server.routes.search import (
+        _get_text_model,
+        _model_cache,
+    )
+
+    # Clear cache and set up cached value
+    _model_cache.clear()
+    mock_cached_model = MagicMock()
+    _model_cache["text:cached-model"] = mock_cached_model
+
+    with patch(
+        "embedding_cluster.server.routes.search.SentenceTransformer"
+    ) as mock_sentence_transformer:
+        result = _get_text_model("cached-model")
+
+        # Verify SentenceTransformer was NOT called (cache hit)
+        mock_sentence_transformer.assert_not_called()
+        # Verify return value is the cached instance
+        assert result == mock_cached_model
+
+    # Clean up
+    _model_cache.clear()
+
+
+def test_get_image_model_cache_miss():
+    """Test _get_image_model() loads CLIPModel and CLIPProcessor on cache miss."""
+    from embedding_cluster.server.routes.search import (
+        _get_image_model,
+        _model_cache,
+    )
+
+    # Clear cache before test
+    _model_cache.clear()
+
+    with (
+        patch(
+            "embedding_cluster.server.routes.search.CLIPModel.from_pretrained"
+        ) as mock_clip_from_pretrained,
+        patch(
+            "embedding_cluster.server.routes.search.CLIPProcessor.from_pretrained"
+        ) as mock_processor_from_pretrained,
+    ):
+        mock_clip_instance = MagicMock()
+        mock_processor_instance = MagicMock()
+        mock_clip_from_pretrained.return_value = mock_clip_instance
+        mock_processor_from_pretrained.return_value = mock_processor_instance
+
+        result = _get_image_model("test-clip")
+
+        # Verify both from_pretrained were called with model name
+        mock_clip_from_pretrained.assert_called_once_with("test-clip")
+        mock_processor_from_pretrained.assert_called_once_with("test-clip")
+        # Verify return value is a tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert result[0] == mock_clip_instance
+        assert result[1] == mock_processor_instance
+        # Verify cache now contains the key
+        assert "image:test-clip" in _model_cache
+        assert _model_cache["image:test-clip"] == result
+
+    # Clean up
+    _model_cache.clear()
+
+
+def test_get_image_model_cache_hit():
+    """Test _get_image_model() uses cached model on cache hit."""
+    from embedding_cluster.server.routes.search import (
+        _get_image_model,
+        _model_cache,
+    )
+
+    # Clear cache and set up cached value
+    _model_cache.clear()
+    mock_clip = MagicMock()
+    mock_processor = MagicMock()
+    mock_tuple = (mock_clip, mock_processor)
+    _model_cache["image:cached-clip"] = mock_tuple
+
+    with (
+        patch(
+            "embedding_cluster.server.routes.search.CLIPModel.from_pretrained"
+        ) as mock_clip_from_pretrained,
+        patch(
+            "embedding_cluster.server.routes.search.CLIPProcessor.from_pretrained"
+        ) as mock_processor_from_pretrained,
+    ):
+        result = _get_image_model("cached-clip")
+
+        # Verify from_pretrained were NOT called (cache hit)
+        mock_clip_from_pretrained.assert_not_called()
+        mock_processor_from_pretrained.assert_not_called()
+        # Verify return value is the cached tuple
+        assert result == mock_tuple
+
+    # Clean up
+    _model_cache.clear()
