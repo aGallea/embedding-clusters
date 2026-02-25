@@ -171,8 +171,13 @@ class TestGetOrCreateChromadbCollections:
         result = get_or_create_chromadb_collections(settings, mock_client)
 
         assert "test_imageUrl" in result
-        mock_client.get_or_create_collection.assert_called_with("test_imageUrl")
-
+        mock_client.get_or_create_collection.assert_called_with(
+            "test_imageUrl",
+            metadata={
+                "model_name": "openai/clip-vit-base-patch32",
+                "model_type": "image",
+            },
+        )
     def test_with_text_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TEXT_EMBEDDING_FIELDS", '["description"]')
         monkeypatch.setenv("CHROMADB_COLLECTION_PREFIX", "pre_")
@@ -184,7 +189,13 @@ class TestGetOrCreateChromadbCollections:
         result = get_or_create_chromadb_collections(settings, mock_client)
 
         assert "pre_description" in result
-
+        mock_client.get_or_create_collection.assert_called_with(
+            "pre_description",
+            metadata={
+                "model_name": "BAAI/bge-small-en-v1.5",
+                "model_type": "text",
+            },
+        )
     def test_with_no_fields(self) -> None:
         settings = Settings()
         mock_client = MagicMock()
