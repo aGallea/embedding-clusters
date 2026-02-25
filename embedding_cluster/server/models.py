@@ -93,3 +93,23 @@ class PlotResponse(BaseModel):
     points: list[PlotPoint]
     clusters: list[PlotCluster]
     total_points: int
+
+
+class SearchResult(BaseModel):
+    id: str
+    distance: float
+    metadata: dict[str, Any]
+
+
+class SearchRequest(BaseModel):
+    collection_name: str
+    query_text: str | None = None
+    query_image_url: str | None = None
+    n_results: int = 10
+    model_type: str = "text"
+    image_model_name: str = "openai/clip-vit-base-patch32"
+    text_model_name: str = "BAAI/bge-small-en-v1.5"
+
+
+class SearchResponse(BaseModel):
+    results: list[SearchResult]

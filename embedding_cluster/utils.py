@@ -166,7 +166,13 @@ def get_or_create_chromadb_collections(
                 f"{settings.chromadb_collection_prefix}{image_embedding_field}"
             )
             chromadb_collections[collection_name] = (
-                chromadb_client.get_or_create_collection(collection_name)
+                chromadb_client.get_or_create_collection(
+                    collection_name,
+                    metadata={
+                        "model_name": settings.image_model_name,
+                        "model_type": "image",
+                    },
+                )
             )
     if settings.text_embedding_fields is not None:
         for text_embedding_field in settings.text_embedding_fields:
@@ -174,7 +180,13 @@ def get_or_create_chromadb_collections(
                 f"{settings.chromadb_collection_prefix}{text_embedding_field}"
             )
             chromadb_collections[collection_name] = (
-                chromadb_client.get_or_create_collection(collection_name)
+                chromadb_client.get_or_create_collection(
+                    collection_name,
+                    metadata={
+                        "model_name": settings.text_model_name,
+                        "model_type": "text",
+                    },
+                )
             )
     return chromadb_collections
 

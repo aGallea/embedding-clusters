@@ -14,6 +14,9 @@ from embedding_cluster.server.routes.collections import (
 from embedding_cluster.server.routes.csv import router as csv_router
 from embedding_cluster.server.routes.index import router as index_router
 from embedding_cluster.server.routes.plot import router as plot_router
+from embedding_cluster.server.routes.search import (
+    router as search_router,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(csv_router)
     app.include_router(index_router)
     app.include_router(plot_router)
+    app.include_router(search_router)
 
     if FRONTEND_DIR.is_dir():
         app.mount(

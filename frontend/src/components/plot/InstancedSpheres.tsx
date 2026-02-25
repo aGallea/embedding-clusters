@@ -8,6 +8,7 @@ export default function InstancedSpheres() {
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
+  const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   const { filteredPoints, filteredPointIds } = useMemo(() => {
@@ -24,19 +25,22 @@ export default function InstancedSpheres() {
     const matrix = new THREE.Matrix4()
     // Pre-create color objects for efficiency
     const colorObjects = CLUSTER_COLORS.map(hex => new THREE.Color(hex))
+    const hasHighlights = highlightedIds.size > 0
+
 
     for (let i = 0; i < filteredPoints.length; i++) {
       const p = filteredPoints[i]
       matrix.setPosition(p.x, p.y, p.z)
       mesh.setMatrixAt(i, matrix)
 
-      const c = colorObjects[p.cluster % colorObjects.length]
+      const dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      const c = colorObjects[p.cluster % colorObjects.length].clone().multiplyScalar(dimFactor)
       mesh.setColorAt(i, c)
     }
 
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [filteredPoints])
+  }, [filteredPoints, highlightedIds])
 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()

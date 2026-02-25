@@ -8,6 +8,7 @@ import ImageSpriteCloud from './ImageSpriteCloud'
 import InstancedSpheres from './InstancedSpheres'
 import TooltipCard from './TooltipCard'
 import CanvasErrorBoundary from './CanvasErrorBoundary'
+import QueryMarker from './QueryMarker'
 
 export default function ScatterPlot() {
   const renderMode = usePlotStore((state) => state.renderMode)
@@ -31,6 +32,8 @@ export default function ScatterPlot() {
           {renderMode === 'particles' && <ParticleCloud />}
           {renderMode === 'sprites' && <ImageSpriteCloud />}
           {renderMode === 'spheres' && <InstancedSpheres />}
+
+          <QueryMarker />
 
           <TooltipCard />
         </Canvas>

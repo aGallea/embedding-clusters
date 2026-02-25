@@ -48,6 +48,8 @@ FastAPI backend and React frontend.
 * Collection management (list, inspect, delete) through UI and API.
 * Async batch indexing with configurable parallelism and retry logic.
 * Hardware acceleration support (CPU, MPS, CUDA).
+* Semantic search within clusters -- find similar items by text
+  query or image URL, with results highlighted in the 3D view.
 
 ### Architecture
 
@@ -208,6 +210,8 @@ The web UI provides:
   and display fields, then visualize in an interactive 3D scatter plot
   with hover tooltips showing metadata and images. Switch between
   colored particles, image sprites, and instanced spheres render modes.
+  Use semantic search to find similar items by text or image URL,
+  with matching points highlighted in the 3D view.
 * **Collections page** -- List, inspect, and delete ChromaDB
   collections.
 
@@ -248,6 +252,60 @@ uv run pytest --cov=embedding_cluster --cov-report=term-missing --cov-fail-under
 uv run pre-commit run --all-files
 ```
 
+### E2E Testing
+
+End-to-end tests use [Playwright](https://playwright.dev/) and run
+against the full stack (FastAPI backend + React frontend).
+
+#### First-Time Setup
+
+1. Install Playwright browsers:
+
+    ```bash
+    cd frontend
+    npm install
+    npx playwright install chromium
+    ```
+
+2. Index sample data for tests (one-time, from project root):
+
+    ```bash
+    RUNNING_MODE=INDEX \
+      LOCAL_CSV_FILENAME=./embedding_cluster/csv/fashion_small.csv \
+      ID_FIELD=id \
+      TEXT_EMBEDDING_FIELDS='["productDisplayName"]' \
+      CHROMADB_COLLECTION_PREFIX=fashion_ \
+      uv run python -m embedding_cluster
+    ```
+
+3. Build the frontend:
+
+    ```bash
+    cd frontend
+    npm run build
+    ```
+
+#### Running E2E Tests
+
+```bash
+cd frontend
+
+# Run all E2E tests (headless, auto-starts backend)
+npm run test:e2e
+
+# Run with interactive UI for debugging
+npm run test:e2e:ui
+
+# Run a specific test file
+npx playwright test e2e/search.spec.ts
+
+# Show HTML report after a run
+npx playwright show-report
+```
+
+The Playwright config auto-starts the FastAPI server. If you
+already have the server running (`RUNNING_MODE=SERVER`), it reuses
+the existing server instead.
 ### Project Structure
 
 ```text

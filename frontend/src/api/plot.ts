@@ -1,4 +1,4 @@
-import type { IndexStartResponse, PlotRequest, PlotResponse } from "../types";
+import type { IndexStartResponse, PlotRequest, PlotResponse, SearchRequest, SearchResponse } from "../types";
 import { apiFetch, apiPost } from "./client";
 
 export async function startPlotCompute(
@@ -13,4 +13,10 @@ export async function getPlotData(
   return apiFetch<PlotResponse & { status: string; ready: boolean }>(
     `/plot/data/${jobId}`,
   );
+}
+
+export async function searchCollection(
+  request: SearchRequest,
+): Promise<SearchResponse> {
+  return apiPost<SearchResponse>("/search", request);
 }
