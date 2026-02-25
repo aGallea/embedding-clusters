@@ -71,9 +71,7 @@ async def _generate_image_embedding(image_url: str, model_name: str) -> list[flo
     return img_features.squeeze(0).cpu().numpy().tolist()  # type: ignore[no-any-return]
 
 
-async def _generate_clip_text_embedding(
-    query_text: str, model_name: str
-) -> list[float]:
+async def _generate_clip_text_embedding(query_text: str, model_name: str) -> list[float]:
     """Encode text using CLIP's text encoder.
 
     This produces embeddings in the same vector space as CLIP image
@@ -128,9 +126,7 @@ async def search_collection(
                     if stored_model_name and stored_model_type == "text"
                     else request.text_model_name
                 )
-                embedding = await _generate_text_embedding(
-                    request.query_text, model_name
-                )
+                embedding = await _generate_text_embedding(request.query_text, model_name)
         else:
             assert request.query_image_url is not None
             model_name = (
