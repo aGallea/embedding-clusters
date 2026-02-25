@@ -178,6 +178,7 @@ class TestGetOrCreateChromadbCollections:
                 "model_type": "image",
             },
         )
+
     def test_with_text_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TEXT_EMBEDDING_FIELDS", '["description"]')
         monkeypatch.setenv("CHROMADB_COLLECTION_PREFIX", "pre_")
@@ -196,6 +197,7 @@ class TestGetOrCreateChromadbCollections:
                 "model_type": "text",
             },
         )
+
     def test_with_no_fields(self) -> None:
         settings = Settings()
         mock_client = MagicMock()

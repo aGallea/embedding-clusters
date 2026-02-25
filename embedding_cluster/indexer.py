@@ -29,12 +29,23 @@ from embedding_cluster.utils import (
 
 logger = logging.getLogger(__name__)
 
+PROGRESS_UPDATE_INTERVAL = 10
+
 
 async def main_indexer(
     settings: Settings,
     on_progress: Callable[[dict[str, Any]], None] | None = None,
+    on_log: Callable[[str, str, str], None] | None = None,
     cancel_event: asyncio.Event | None = None,
 ) -> None:
+    def _emit_log(
+        message: str,
+        level: str = "info",
+        verbosity: str = "low",
+    ) -> None:
+        if on_log is not None:
+            on_log(message, level, verbosity)
+
     chromadb_client: ClientAPI = chromadb.PersistentClient(path="./chromadb")
     chromadb_docs_collections: dict[str, ChromaDocsCollection] = (
         init_chroma_docs_collection(settings)
@@ -53,27 +64,49 @@ async def main_indexer(
         and len(settings.image_embedding_fields) > 0
     ):
         logger.info("Loading image model: %s", settings.image_model_name)
-        image_model = CLIPModel.from_pretrained(settings.image_model_name).to(
-            settings.process_unit_device
-        )
-        image_model_processor = CLIPProcessor.from_pretrained(settings.image_model_name)
+        _emit_log(f"Loading image model: {settings.image_model_name}...")
+        try:
+            image_model = CLIPModel.from_pretrained(settings.image_model_name).to(
+                settings.process_unit_device
+            )
+            image_model_processor = CLIPProcessor.from_pretrained(
+                settings.image_model_name
+            )
+            _emit_log("Image model loaded successfully")
+        except Exception as exc:
+            _emit_log(
+                f"Failed to load image model: {exc}",
+                level="error",
+            )
+            raise
 
     if (
         settings.text_embedding_fields is not None
         and len(settings.text_embedding_fields) > 0
     ):
         logger.info("Loading text model: %s", settings.text_model_name)
-        text_model_transformer = SentenceTransformer(settings.text_model_name).to(
-            settings.process_unit_device
-        )
+        _emit_log(f"Loading text model: {settings.text_model_name}...")
+        try:
+            text_model_transformer = SentenceTransformer(settings.text_model_name).to(
+                settings.process_unit_device
+            )
+            _emit_log("Text model loaded successfully")
+        except Exception as exc:
+            _emit_log(
+                f"Failed to load text model: {exc}",
+                level="error",
+            )
+            raise
 
     start_time = time.perf_counter()
 
+    _emit_log("Loading CSV file...")
     with open(settings.local_csv_filename) as csv_file:
         csv_iter = csv.DictReader(csv_file)
+        _emit_log("CSV file opened, reading rows...")
         rows_read = 0
         curr_rows: list[dict[str, Any]] = []
-
+        batch_num = 0
         skipped_rows = 0
         if settings.index_start_line is not None:
             skipped_rows = 1
@@ -84,16 +117,42 @@ async def main_indexer(
 
         for row in csv_iter:
             if cancel_event is not None and cancel_event.is_set():
-                logger.info("Indexing cancelled at row %d", rows_read + skipped_rows)
+                logger.info(
+                    "Indexing cancelled at row %d",
+                    rows_read + skipped_rows,
+                )
+                _emit_log(
+                    f"Indexing cancelled at row {rows_read + skipped_rows}",
+                    level="warning",
+                )
                 break
             rows_read += 1
             curr_rows.append(row)
+            if on_progress is not None and rows_read % PROGRESS_UPDATE_INTERVAL == 0:
+                on_progress(
+                    {
+                        "rows_indexed": rows_read,
+                        "total_rows": None,
+                        "errors": 0,
+                        "elapsed_seconds": (time.perf_counter() - start_time),
+                    }
+                )
+                _emit_log(
+                    f"Processing row {rows_read}...",
+                    verbosity="high",
+                )
             if (
                 settings.index_end_line is not None
                 and settings.index_end_line == rows_read + skipped_rows
             ):
                 break
             if len(curr_rows) == settings.index_bulk_size:
+                batch_num += 1
+                batch_start = rows_read - len(curr_rows) + 1
+                _emit_log(
+                    f"Processing batch {batch_num} ({batch_start}-{rows_read})...",
+                    verbosity="medium",
+                )
                 await _handle_batch(
                     settings=settings,
                     rows=curr_rows,
@@ -104,6 +163,10 @@ async def main_indexer(
                     chromadb_docs_collections=chromadb_docs_collections,
                     chromadb_collections=chromadb_collections,
                 )
+                _emit_log(
+                    f"Batch {batch_num} complete, writing to ChromaDB...",
+                    verbosity="medium",
+                )
                 curr_rows = []
                 chromadb_docs_collections = init_chroma_docs_collection(settings)
                 if on_progress is not None:
@@ -112,15 +175,25 @@ async def main_indexer(
                             "rows_indexed": rows_read,
                             "total_rows": None,
                             "errors": 0,
-                            "elapsed_seconds": time.perf_counter() - start_time,
+                            "elapsed_seconds": (time.perf_counter() - start_time),
                         }
                     )
+                _emit_log(
+                    f"Indexed {rows_read} rows so far",
+                    verbosity="medium",
+                )
                 logger.info(
                     "Indexed %d rows. [%d]",
                     rows_read,
                     skipped_rows + rows_read,
                 )
         if len(curr_rows) > 0:
+            batch_num += 1
+            batch_start = rows_read - len(curr_rows) + 1
+            _emit_log(
+                f"Processing batch {batch_num} ({batch_start}-{rows_read})...",
+                verbosity="medium",
+            )
             await _handle_batch(
                 settings=settings,
                 rows=curr_rows,
@@ -131,15 +204,25 @@ async def main_indexer(
                 chromadb_docs_collections=chromadb_docs_collections,
                 chromadb_collections=chromadb_collections,
             )
+            _emit_log(
+                f"Batch {batch_num} complete, writing to ChromaDB...",
+                verbosity="medium",
+            )
             if on_progress is not None:
                 on_progress(
                     {
                         "rows_indexed": rows_read,
                         "total_rows": None,
                         "errors": 0,
-                        "elapsed_seconds": time.perf_counter() - start_time,
+                        "elapsed_seconds": (time.perf_counter() - start_time),
                     }
                 )
+
+        elapsed = time.perf_counter() - start_time
+        _emit_log(
+            f"Indexing complete: {rows_read} rows in {elapsed:.1f}s",
+            level="success",
+        )
 
 
 async def _handle_batch(

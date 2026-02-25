@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -39,8 +41,22 @@ def resolve_csv_path(csv_filename: str) -> Path:
     return Path("./uploads") / candidate
 
 
+def _get_collection_names(settings: Settings) -> list[str]:
+    """Build collection names from settings."""
+    names: list[str] = []
+    prefix = settings.chromadb_collection_prefix
+    if settings.image_embedding_fields:
+        for field in settings.image_embedding_fields:
+            names.append(f"{prefix}{field}")
+    if settings.text_embedding_fields:
+        for field in settings.text_embedding_fields:
+            names.append(f"{prefix}{field}")
+    return names
+
+
 async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
     """Run indexing in background, updating task state and broadcasting progress."""
+    heartbeat_task: asyncio.Task[None] | None = None
     try:
         # Construct Settings from IndexRequest
         try:
@@ -67,6 +83,7 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
 
         # Update task status to RUNNING
         task_state.status = TaskStatus.RUNNING
+        start_time = time.monotonic()
 
         # Define progress callback
         def on_progress(progress_data: dict[str, Any]) -> None:
@@ -79,19 +96,35 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
             # ruff: noqa: RUF006
             asyncio.create_task(ws_manager.broadcast(task_state.job_id, progress_data))
 
-            rows_indexed = progress_data.get("rows_indexed")
-            if isinstance(rows_indexed, int) and rows_indexed > 0:
-                # ruff: noqa: RUF006
-                asyncio.create_task(
-                    ws_manager.broadcast(
-                        task_state.job_id,
-                        {
-                            "type": "log",
-                            "level": "info",
-                            "message": f"Indexed {rows_indexed} rows",
-                        },
-                    )
+        # Define log callback
+        def on_log(message: str, level: str, verbosity: str) -> None:
+            # ruff: noqa: RUF006
+            asyncio.create_task(
+                ws_manager.broadcast(
+                    task_state.job_id,
+                    {
+                        "type": "log",
+                        "level": level,
+                        "message": message,
+                        "verbosity": verbosity,
+                    },
                 )
+            )
+
+        # Heartbeat background task
+        async def _heartbeat() -> None:
+            while True:
+                await asyncio.sleep(3)
+                elapsed = time.monotonic() - start_time
+                await ws_manager.broadcast(
+                    task_state.job_id,
+                    {
+                        "type": "heartbeat",
+                        "elapsed_seconds": elapsed,
+                    },
+                )
+
+        heartbeat_task = asyncio.create_task(_heartbeat())
 
         total_rows = request.total_rows
         on_progress(
@@ -103,13 +136,33 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
             }
         )
 
-        # Run indexer with callback and cancel event
+        # Run indexer with callbacks and cancel event
         await main_indexer(
-            settings, on_progress=on_progress, cancel_event=task_state.cancel_event
+            settings,
+            on_progress=on_progress,
+            on_log=on_log,
+            cancel_event=task_state.cancel_event,
         )
 
-        # Success
+        # Success — send completion message
         task_state.status = TaskStatus.COMPLETED
+        elapsed = time.monotonic() - start_time
+        collection_names = _get_collection_names(settings)
+        rows_indexed = task_state.progress.get("rows_indexed", 0)
+        # ruff: noqa: RUF006
+        asyncio.create_task(
+            ws_manager.broadcast(
+                task_state.job_id,
+                {
+                    "type": "completed",
+                    "status": "completed",
+                    "progress": task_state.progress,
+                    "total_indexed": rows_indexed,
+                    "collection_names": collection_names,
+                    "elapsed_seconds": elapsed,
+                },
+            )
+        )
     except Exception as e:
         logger.exception("Indexing failed for job %s", task_state.job_id)
         task_state.status = TaskStatus.FAILED
@@ -119,12 +172,18 @@ async def _run_indexing(task_state: TaskState, request: IndexRequest) -> None:
             ws_manager.broadcast(
                 task_state.job_id,
                 {
+                    "type": "error",
                     "status": task_state.status.value,
                     "error": task_state.error,
+                    "message": str(e),
                     "progress": task_state.progress,
                 },
             )
         )
+    finally:
+        if heartbeat_task is not None:
+            with contextlib.suppress(RuntimeError):
+                heartbeat_task.cancel()
 
 
 @router.post("/start", response_model=IndexStartResponse)

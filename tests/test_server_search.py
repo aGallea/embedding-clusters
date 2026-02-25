@@ -284,9 +284,7 @@ async def test_search_image_download_failure(
     assert response.status_code == 500
 
 
-async def test_search_text_on_image_collection_uses_clip(
-    client, mock_chromadb_client
-):
+async def test_search_text_on_image_collection_uses_clip(client, mock_chromadb_client):
     """Text query on an image (CLIP) collection should use CLIP text encoder."""
     import torch
 
@@ -333,9 +331,7 @@ async def test_search_text_on_image_collection_uses_clip(
     mock_clip.get_text_features.assert_called_once()
 
 
-async def test_search_uses_stored_text_model_name(
-    client, mock_chromadb_client
-):
+async def test_search_uses_stored_text_model_name(client, mock_chromadb_client):
     """Text query should use the model name stored in collection metadata."""
     mock_coll = MagicMock()
     mock_coll.count.return_value = 100
@@ -410,9 +406,7 @@ async def test_search_uses_stored_image_model_name(
         ) as mock_downloader_cls,
     ):
         mock_instance = MagicMock()
-        mock_instance.download_image_exp_backoff = AsyncMock(
-            return_value=mock_image
-        )
+        mock_instance.download_image_exp_backoff = AsyncMock(return_value=mock_image)
         mock_downloader_cls.return_value = mock_instance
 
         response = await client.post(

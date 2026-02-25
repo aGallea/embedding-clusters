@@ -49,7 +49,7 @@ async def client(app):
 def mock_indexer():
     """Mock main_indexer to avoid loading ML models in tests."""
 
-    async def fake_indexer(settings, on_progress=None, cancel_event=None):
+    async def fake_indexer(settings, on_progress=None, on_log=None, cancel_event=None):
         if on_progress:
             on_progress(
                 {
@@ -138,7 +138,7 @@ async def test_status_success(client, mock_indexer):
 
 
 async def test_status_includes_error_on_failure(client, mock_indexer):
-    async def failing_indexer(settings, on_progress=None, cancel_event=None):
+    async def failing_indexer(settings, on_progress=None, on_log=None, cancel_event=None):
         raise RuntimeError("boom")
 
     with patch(
@@ -192,7 +192,7 @@ async def test_cancel_running_job(client, mock_indexer):
     """Test cancelling a running job."""
 
     # Need a longer-running job for cancellation
-    async def slow_indexer(settings, on_progress=None, cancel_event=None):
+    async def slow_indexer(settings, on_progress=None, on_log=None, cancel_event=None):
         for i in range(10):
             if cancel_event and cancel_event.is_set():
                 return
