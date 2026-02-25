@@ -78,6 +78,33 @@ Test configuration is in `pyproject.toml` under `[tool.pytest.ini_options]`:
 - `testpaths = ["tests"]`
 - `asyncio_mode = "auto"` (pytest-asyncio auto mode)
 
+## E2E Testing
+
+```bash
+# Install Playwright browsers (first-time)
+cd frontend && npx playwright install chromium
+
+# Index sample data for E2E tests (first-time, from project root)
+RUNNING_MODE=INDEX LOCAL_CSV_FILENAME=./embedding_cluster/csv/fashion_small.csv \
+  ID_FIELD=id TEXT_EMBEDDING_FIELDS='["productDisplayName"]' \
+  CHROMADB_COLLECTION_PREFIX=fashion_ uv run python -m embedding_cluster
+
+# Build frontend (required before E2E)
+cd frontend && npm run build
+
+# Run E2E tests
+cd frontend && npm run test:e2e
+
+# Run E2E tests with UI
+cd frontend && npm run test:e2e:ui
+
+# Run single test file
+cd frontend && npx playwright test e2e/search.spec.ts
+```
+
+E2E tests require pre-indexed ChromaDB data. The `webServer` config in
+`playwright.config.ts` auto-starts the FastAPI backend. Tests run against
+`http://localhost:8000`.
 ## CI
 
 GitHub Actions workflow in `.github/workflows/ci.yml` runs on push/PR:
