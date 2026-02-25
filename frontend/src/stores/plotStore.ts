@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PlotResponse } from '../types'
+import type { PlotResponse, SearchResult } from '../types'
 
 interface PlotState {
   plotData: PlotResponse | null
@@ -7,6 +7,10 @@ interface PlotState {
   hoveredPointId: string | null
   renderMode: 'particles' | 'sprites' | 'spheres'
   pointSize: number
+  searchResults: SearchResult[] | null
+  highlightedIds: Set<string>
+  isSearching: boolean
+  queryPoint: { x: number; y: number; z: number } | null
   // actions
   setPlotData: (data: PlotResponse | null) => void
   toggleCluster: (index: number) => void
@@ -14,6 +18,11 @@ interface PlotState {
   setRenderMode: (mode: 'particles' | 'sprites' | 'spheres') => void
   setPointSize: (size: number) => void
   resetVisibleClusters: (clusterCount: number) => void
+  setSearchResults: (results: SearchResult[] | null) => void
+  setHighlightedIds: (ids: Set<string>) => void
+  setIsSearching: (searching: boolean) => void
+  clearSearch: () => void
+  setQueryPoint: (point: { x: number; y: number; z: number } | null) => void
 }
 
 export const CLUSTER_COLORS = [
@@ -29,6 +38,10 @@ export const usePlotStore = create<PlotState>((set) => ({
   hoveredPointId: null,
   renderMode: 'particles',
   pointSize: 5,
+  searchResults: null,
+  highlightedIds: new Set(),
+  isSearching: false,
+  queryPoint: null,
 
   setPlotData: (data) => set({ plotData: data }),
 
@@ -53,4 +66,18 @@ export const usePlotStore = create<PlotState>((set) => ({
     set({
       visibleClusters: new Set(Array.from({ length: clusterCount }, (_, i) => i)),
     }),
+
+  setSearchResults: (results) => set({
+    searchResults: results,
+    highlightedIds: new Set(results?.map(r => r.id) ?? []),
+  }),
+  setHighlightedIds: (ids) => set({ highlightedIds: ids }),
+  setIsSearching: (searching) => set({ isSearching: searching }),
+  setQueryPoint: (point) => set({ queryPoint: point }),
+  clearSearch: () => set({
+    searchResults: null,
+    highlightedIds: new Set(),
+    isSearching: false,
+    queryPoint: null,
+  }),
 }))

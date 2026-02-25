@@ -1,7 +1,10 @@
 import { useRef, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PlotControls from '../components/plot/PlotControls'
 import ScatterPlot from '../components/plot/ScatterPlot'
 import ClusterLegend from '../components/plot/ClusterLegend'
+import SearchBar from '../components/plot/SearchBar'
+import SearchResults from '../components/plot/SearchResults'
 import { usePlotData } from '../hooks/usePlotData'
 import { usePlotStore } from '../stores/plotStore'
 
@@ -10,6 +13,8 @@ export default function PlotPage() {
   const plotData = usePlotStore((state) => state.plotData)
   const plotContainerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [searchParams] = useSearchParams()
+  const collectionName = searchParams.get('collection') ?? ''
 
   const toggleFullscreen = useCallback(() => {
     if (!plotContainerRef.current) return
@@ -28,6 +33,12 @@ export default function PlotPage() {
       <div className="flex flex-1 overflow-hidden">
         <div className="w-80 border-r border-gray-200 bg-white overflow-y-auto shrink-0 z-10 shadow-sm">
           <PlotControls onCompute={compute} isComputing={isComputing} />
+          {plotData && collectionName && (
+            <>
+              <SearchBar collectionName={collectionName} />
+              <SearchResults />
+            </>
+          )}
         </div>
 
         <div className="flex-1 flex flex-col relative bg-gray-100">

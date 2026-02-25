@@ -92,3 +92,24 @@ export interface PlotResponse {
 export interface MessageResponse {
   message: string;
 }
+
+// Search
+export interface SearchResult {
+  id: string;
+  distance: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface SearchRequest {
+  collection_name: string;
+  query_text?: string;
+  query_image_url?: string;
+  n_results?: number;
+  model_type?: string;
+  image_model_name?: string;
+  text_model_name?: string;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+}
