@@ -35,6 +35,9 @@ FastAPI backend and React frontend.
 * Index embeddings into ChromaDB for persistent vector storage.
 * Perform k-means clustering on embeddings with configurable cluster
   count.
+* Automatic cluster count suggestion using elbow method (inertia
+  curve) and silhouette score analysis across k=2..30, with an
+  interactive chart to review the trade-off before applying.
 * Visualize clustering results in an interactive 3D scatter plot
   using t-SNE dimensionality reduction.
 * Web UI with FastAPI backend and React frontend for browser-based
@@ -210,6 +213,11 @@ The web UI provides:
   and display fields, then visualize in an interactive 3D scatter plot
   with hover tooltips showing metadata and images. Switch between
   colored particles, image sprites, and instanced spheres render modes.
+  Click "Suggest" next to the cluster count slider to automatically
+  analyze optimal cluster count -- the tool runs k-means for k=2..30,
+  computes inertia (elbow method) and silhouette scores, and displays
+  the results in a chart with the recommended k highlighted. Accept
+  the suggestion to update the slider, or keep your manual value.
   Use semantic search to find similar items by text or image URL,
   with matching points highlighted in the 3D view.
 * **Collections page** -- List, inspect, and delete ChromaDB
@@ -306,6 +314,7 @@ npx playwright show-report
 The Playwright config auto-starts the FastAPI server. If you
 already have the server running (`RUNNING_MODE=SERVER`), it reuses
 the existing server instead.
+
 ### Project Structure
 
 ```text
