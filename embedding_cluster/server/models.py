@@ -86,6 +86,16 @@ class SuggestClustersResponse(BaseModel):
     suggested_k: int
 
 
+class SuggestClustersStatusResponse(BaseModel):
+    status: str
+    ready: bool
+    phase: str | None = None
+    current_k: int | None = None
+    total_k: int | None = None
+    result: SuggestClustersResponse | None = None
+    error: str | None = None
+
+
 class PlotPoint(BaseModel):
     x: float
     y: float

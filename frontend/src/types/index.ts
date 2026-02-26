@@ -104,6 +104,16 @@ export interface SuggestClustersResponse {
   suggested_k: number;
 }
 
+export interface SuggestClustersStatusResponse {
+  status: string;
+  ready: boolean;
+  phase?: string;
+  current_k?: number;
+  total_k?: number;
+  result?: SuggestClustersResponse;
+  error?: string;
+}
+
 // Messages
 export interface MessageResponse {
   message: string;

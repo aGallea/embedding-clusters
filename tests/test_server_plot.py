@@ -259,8 +259,9 @@ def mock_suggest() -> Iterator[None]:
         _embeddings: object,
         k_range: range,
         max_samples: int = 5000,
+        on_progress: object | None = None,
     ) -> dict[str, object]:
-        _ = max_samples
+        _ = (max_samples, on_progress)
         return {
             "k_values": list(k_range),
             "inertias": [100.0 - i * 10 for i in range(len(k_range))],
@@ -306,10 +307,8 @@ async def test_suggest_clusters_success(
 
     assert response.status_code == status.HTTP_200_OK
     data = cast("dict[str, object]", response.json())
-    assert "k_values" in data
-    assert "inertias" in data
-    assert "silhouette_scores" in data
-    assert "suggested_k" in data
+    assert "job_id" in data
+    assert cast("str", data["status"]) == "pending"
 
 
 @pytest.mark.asyncio
@@ -320,16 +319,24 @@ async def test_suggest_clusters_custom_range(
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post(
+        start_response = await client.post(
             "/api/plot/suggest-clusters",
             json={"collection_name": "test_collection", "k_min": 3, "k_max": 15},
         )
+        start_data = cast("dict[str, object]", start_response.json())
+        job_id = cast("str", start_data["job_id"])
+
+        await asyncio.sleep(0.3)
+
+        response = await client.get(f"/api/plot/suggest-clusters/{job_id}")
 
     assert response.status_code == status.HTTP_200_OK
     data = cast("dict[str, object]", response.json())
-    k_values = cast("list[int]", data["k_values"])
+    assert cast("bool", data["ready"]) is True
+    result = cast("dict[str, object]", data["result"])
+    k_values = cast("list[int]", result["k_values"])
     assert k_values[0] == 3
-    assert k_values[-1] == 14  # range is exclusive on end
+    assert k_values[-1] == 14
 
 
 @pytest.mark.asyncio
@@ -354,9 +361,57 @@ async def test_suggest_clusters_collection_not_found(app: FastAPI) -> None:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            response = await client.post(
+            start_response = await client.post(
                 "/api/plot/suggest-clusters",
                 json={"collection_name": "nonexistent"},
             )
+            start_data = cast("dict[str, object]", start_response.json())
+            job_id = cast("str", start_data["job_id"])
+
+            await asyncio.sleep(0.3)
+
+            response = await client.get(f"/api/plot/suggest-clusters/{job_id}")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = cast("dict[str, object]", response.json())
+    assert cast("bool", data["ready"]) is False
+    assert cast("str", data["status"]) == "failed"
+    assert "error" in data
+
+
+@pytest.mark.asyncio
+async def test_suggest_clusters_status_not_found(app: FastAPI) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/plot/suggest-clusters/nonexistent")
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_suggest_clusters_status_completed(
+    app: FastAPI, mock_suggest: None, mock_chromadb_collection: Mock
+) -> None:
+    _ = (mock_suggest, mock_chromadb_collection)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start_response = await client.post(
+            "/api/plot/suggest-clusters",
+            json={"collection_name": "test_collection"},
+        )
+        start_data = cast("dict[str, object]", start_response.json())
+        job_id = cast("str", start_data["job_id"])
+
+        await asyncio.sleep(0.3)
+
+        response = await client.get(f"/api/plot/suggest-clusters/{job_id}")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = cast("dict[str, object]", response.json())
+    assert cast("bool", data["ready"]) is True
+    assert cast("str", data["status"]) == "completed"
+    result = cast("dict[str, object]", data["result"])
+    assert "k_values" in result
+    assert "suggested_k" in result

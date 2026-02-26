@@ -15,6 +15,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chromadb.api import ClientAPI
 
     from embedding_cluster.settings import Settings
@@ -41,7 +43,7 @@ def gpt_get_cluster_name(info: str, settings: Settings) -> str:
     completion = openai_client.chat.completions.create(
         model=settings.gpt_default_model,
         temperature=settings.gpt_default_temperature,
-        messages=messages,  # type: ignore[arg-type]
+        messages=messages,  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
     )
     content = completion.choices[0].message.content or ""
     return (content[:30] + "..") if len(content) > 30 else content
@@ -52,7 +54,7 @@ def load_chromadb_collection(settings: Settings) -> Any:
     collection = chromadb_client.get_or_create_collection(
         settings.chromadb_collection_name
     )
-    return collection.get(include=["embeddings", "metadatas"])  # type: ignore[list-item]
+    return collection.get(include=["embeddings", "metadatas"])  # type: ignore[list-item]  # pyright: ignore[reportArgumentType]
 
 
 def load_chromadb_embeddings(collection_name: str) -> np.ndarray:
@@ -63,7 +65,7 @@ def load_chromadb_embeddings(collection_name: str) -> np.ndarray:
     except Exception as exc:
         msg = f"Collection '{collection_name}' not found"
         raise ValueError(msg) from exc
-    result = collection.get(include=["embeddings"])  # type: ignore[list-item]
+    result = collection.get(include=["embeddings"])  # type: ignore[list-item]  # pyright: ignore[reportArgumentType]
     embeddings = result.get("embeddings")
     if embeddings is None:
         msg = f"No embeddings found in collection '{collection_name}'"
@@ -75,6 +77,7 @@ def suggest_optimal_clusters(
     embeddings: np.ndarray,
     k_range: range = range(2, 31),
     max_samples: int = 5000,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Run elbow method and silhouette analysis to suggest optimal k."""
     random_state = 171
@@ -101,8 +104,19 @@ def suggest_optimal_clusters(
         )
         labels = kmeans.fit_predict(scaled)
         k_values.append(k)
-        inertias.append(float(kmeans.inertia_))
+        inertia = kmeans.inertia_
+        if inertia is None:
+            inertia = 0.0
+        inertias.append(float(inertia))
         silhouette_scores_list.append(float(silhouette_score(scaled, labels)))
+        if on_progress is not None:
+            on_progress(
+                {
+                    "phase": "analyzing",
+                    "current_k": k,
+                    "total_k": len(k_range),
+                }
+            )
 
     suggested_k = k_values[int(np.argmax(silhouette_scores_list))]
 

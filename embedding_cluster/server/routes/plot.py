@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TypedDict, cast
+from typing import cast
 
 from fastapi import APIRouter, HTTPException
 
@@ -15,7 +15,6 @@ from embedding_cluster.server.models import (
     IndexStartResponse,
     PlotRequest,
     SuggestClustersRequest,
-    SuggestClustersResponse,
 )
 from embedding_cluster.server.tasks import TaskState, TaskStatus, task_registry
 from embedding_cluster.settings import Settings
@@ -23,13 +22,6 @@ from embedding_cluster.settings import Settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/plot", tags=["plot"])
-
-
-class SuggestClustersResult(TypedDict):
-    k_values: list[int]
-    inertias: list[float]
-    silhouette_scores: list[float]
-    suggested_k: int
 
 
 async def _run_compute(task_state: TaskState, request: PlotRequest) -> None:
@@ -80,27 +72,70 @@ async def get_plot_data(job_id: str) -> dict[str, object]:
     }
 
 
-@router.post("/suggest-clusters", response_model=SuggestClustersResponse)
-async def suggest_clusters(
-    request: SuggestClustersRequest,
-) -> SuggestClustersResponse:
+async def _run_suggest_clusters(
+    task_state: TaskState, request: SuggestClustersRequest
+) -> None:
     try:
+        task_state.status = TaskStatus.RUNNING
+        task_state.progress = {"phase": "loading_embeddings"}
         embeddings = await asyncio.to_thread(
             load_chromadb_embeddings, request.collection_name
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    result = cast(
-        "SuggestClustersResult",
-        cast(
-            "object",
-            await asyncio.to_thread(
-                suggest_optimal_clusters,
-                embeddings,
-                k_range=range(request.k_min, request.k_max),
-                max_samples=5000,
-            ),
-        ),
-    )
-    return SuggestClustersResponse(**result)
+        def on_progress(info: dict[str, object]) -> None:
+            task_state.progress = {**task_state.progress, **info}
+
+        task_state.progress = {
+            "phase": "analyzing",
+            "current_k": 0,
+            "total_k": 0,
+        }
+        result = await asyncio.to_thread(
+            suggest_optimal_clusters,
+            embeddings,
+            k_range=range(request.k_min, request.k_max),
+            max_samples=5000,
+            on_progress=on_progress,
+        )
+        task_state.result = result
+        task_state.status = TaskStatus.COMPLETED
+    except Exception as e:
+        logger.exception("Suggest-clusters failed for job %s", task_state.job_id)
+        task_state.status = TaskStatus.FAILED
+        task_state.error = str(e)
+
+
+@router.post("/suggest-clusters", response_model=IndexStartResponse)
+async def suggest_clusters(
+    request: SuggestClustersRequest,
+) -> IndexStartResponse:
+    task = task_registry.create()
+    _ = asyncio.create_task(_run_suggest_clusters(task, request))  # noqa: RUF006
+    return IndexStartResponse(job_id=task.job_id, status=task.status.value)
+
+
+@router.get("/suggest-clusters/{job_id}")
+async def get_suggest_clusters_status(job_id: str) -> dict[str, object]:
+    task = task_registry.get(job_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if task.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
+        return {
+            "status": task.status.value,
+            "ready": False,
+            "phase": task.progress.get("phase"),
+            "current_k": task.progress.get("current_k"),
+            "total_k": task.progress.get("total_k"),
+        }
+    if task.status == TaskStatus.FAILED:
+        return {
+            "status": "failed",
+            "ready": False,
+            "error": task.error,
+        }
+    result = cast("dict[str, object]", task.result)
+    return {
+        "status": "completed",
+        "ready": True,
+        "result": result,
+    }

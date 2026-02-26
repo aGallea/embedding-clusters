@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { suggestClusters } from '../../api/plot'
-import type { SuggestClustersResponse } from '../../types'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { suggestClusters, getSuggestClustersStatus } from '../../api/plot'
+import type { SuggestClustersResponse, SuggestClustersStatusResponse } from '../../types'
 
 interface ClusterSuggestionProps {
   collectionName: string
@@ -83,21 +83,69 @@ function SuggestionChart({ data }: { data: SuggestClustersResponse }) {
   )
 }
 
+function ProgressIndicator({ status }: { status: SuggestClustersStatusResponse }) {
+  const { phase, current_k, total_k } = status
+  let message = 'Starting...'
+  if (phase === 'loading_embeddings') {
+    message = 'Loading embeddings...'
+  } else if (phase === 'analyzing' && current_k && total_k) {
+    message = `Analyzing clusters (k=${current_k}/${total_k})...`
+  }
+  return (
+    <div className="flex items-center gap-2 text-xs text-gray-500">
+      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
 export default function ClusterSuggestion({ collectionName, onApply }: ClusterSuggestionProps) {
   const [data, setData] = useState<SuggestClustersResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<SuggestClustersStatusResponse | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => stopPolling()
+  }, [stopPolling])
 
   const handleSuggest = async () => {
     setIsLoading(true)
     setError(null)
     setData(null)
+    setProgress(null)
     try {
-      const result = await suggestClusters({ collection_name: collectionName })
-      setData(result)
+      const { job_id } = await suggestClusters({ collection_name: collectionName })
+
+      intervalRef.current = setInterval(async () => {
+        try {
+          const status = await getSuggestClustersStatus(job_id)
+          setProgress(status)
+          if (status.ready && status.result) {
+            stopPolling()
+            setData(status.result)
+            setIsLoading(false)
+          } else if (status.status === 'failed') {
+            stopPolling()
+            setError(status.error ?? 'Analysis failed')
+            setIsLoading(false)
+          }
+        } catch (e) {
+          stopPolling()
+          setError(e instanceof Error ? e.message : 'Failed to check status')
+          setIsLoading(false)
+        }
+      }, 1500)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to suggest clusters')
-    } finally {
+      setError(e instanceof Error ? e.message : 'Failed to start analysis')
       setIsLoading(false)
     }
   }
@@ -117,6 +165,8 @@ export default function ClusterSuggestion({ collectionName, onApply }: ClusterSu
       >
         {isLoading ? 'Analyzing...' : 'Suggest'}
       </button>
+
+      {isLoading && progress && <ProgressIndicator status={progress} />}
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 

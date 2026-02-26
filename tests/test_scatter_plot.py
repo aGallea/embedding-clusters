@@ -305,6 +305,31 @@ class TestLoadChromadbEmbeddings:
 
 
 class TestSuggestOptimalClusters:
+    def test_suggest_optimal_clusters_progress_callback(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        cluster1 = rng.normal(loc=0.0, scale=0.1, size=(20, 10))
+        cluster2 = rng.normal(loc=5.0, scale=0.1, size=(20, 10))
+        cluster3 = rng.normal(loc=10.0, scale=0.1, size=(20, 10))
+        embeddings = np.vstack([cluster1, cluster2, cluster3])
+
+        progress_updates: list[dict[str, object]] = []
+
+        def on_progress(info: dict[str, object]) -> None:
+            progress_updates.append(info)
+
+        result = suggest_optimal_clusters(
+            embeddings, k_range=range(2, 6), on_progress=on_progress
+        )
+
+        assert result["suggested_k"] in list(range(2, 6))
+        assert len(progress_updates) == 4
+        assert progress_updates[0]["phase"] == "analyzing"
+        assert progress_updates[0]["current_k"] == 2
+        assert progress_updates[0]["total_k"] == 4
+        assert progress_updates[-1]["current_k"] == 5
+
     def test_returns_correct_structure(self) -> None:
         from embedding_cluster.scatter_plot import suggest_optimal_clusters
 
