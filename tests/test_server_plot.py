@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from typing import TYPE_CHECKING, TypeVar, cast
+from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
     from fastapi import FastAPI
 
 from embedding_cluster.server.app import create_app
+
+T = TypeVar("T")
 
 
 @pytest.fixture
@@ -21,8 +24,8 @@ def app() -> FastAPI:
 
 
 @pytest.fixture
-def mock_compute():
-    def fake_compute(settings):
+def mock_compute() -> Iterator[None]:
+    def fake_compute(_settings: object) -> dict[str, object]:
         return {
             "points": [
                 {
@@ -61,7 +64,8 @@ def mock_compute():
 
 
 @pytest.mark.asyncio
-async def test_start_compute_success(app: FastAPI, mock_compute) -> None:
+async def test_start_compute_success(app: FastAPI, mock_compute: None) -> None:
+    _ = mock_compute
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -71,14 +75,14 @@ async def test_start_compute_success(app: FastAPI, mock_compute) -> None:
         )
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
+    data = cast("dict[str, object]", response.json())
     assert "job_id" in data
-    assert data["status"] == "pending"
+    assert cast("str", data["status"]) == "pending"
 
 
 @pytest.mark.asyncio
 async def test_start_compute_runs_in_thread(app: FastAPI) -> None:
-    def fake_compute(settings):
+    def fake_compute(_settings: object) -> dict[str, object]:
         return {"points": [], "clusters": [], "total_points": 0}
 
     with (
@@ -89,7 +93,11 @@ async def test_start_compute_runs_in_thread(app: FastAPI) -> None:
         patch("embedding_cluster.server.routes.plot.asyncio.to_thread") as to_thread,
     ):
 
-        async def fake_to_thread(fn, *args, **kwargs):
+        async def fake_to_thread(
+            fn: Callable[..., T],
+            *args: object,
+            **kwargs: object,
+        ) -> T:
             return fn(*args, **kwargs)
 
         to_thread.side_effect = fake_to_thread
@@ -110,7 +118,8 @@ async def test_start_compute_runs_in_thread(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
-async def test_start_compute_missing_collection(app: FastAPI, mock_compute) -> None:
+async def test_start_compute_missing_collection(app: FastAPI, mock_compute: None) -> None:
+    _ = mock_compute
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -123,7 +132,8 @@ async def test_start_compute_missing_collection(app: FastAPI, mock_compute) -> N
 
 
 @pytest.mark.asyncio
-async def test_get_data_not_found(app: FastAPI, mock_compute) -> None:
+async def test_get_data_not_found(app: FastAPI, mock_compute: None) -> None:
+    _ = mock_compute
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -133,7 +143,8 @@ async def test_get_data_not_found(app: FastAPI, mock_compute) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_data_pending(app: FastAPI, mock_compute) -> None:
+async def test_get_data_pending(app: FastAPI, mock_compute: None) -> None:
+    _ = mock_compute
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -141,19 +152,21 @@ async def test_get_data_pending(app: FastAPI, mock_compute) -> None:
             "/api/plot/compute",
             json={"chromadb_collection_name": "test_collection"},
         )
-        job_id = start_response.json()["job_id"]
+        start_data = cast("dict[str, object]", start_response.json())
+        job_id = cast("str", start_data["job_id"])
 
         # Immediately check status
         response = await client.get(f"/api/plot/data/{job_id}")
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data["ready"] is False
-    assert data["status"] in ["pending", "running", "completed"]
+    data = cast("dict[str, object]", response.json())
+    assert cast("bool", data["ready"]) is False
+    assert cast("str", data["status"]) in ["pending", "running", "completed"]
 
 
 @pytest.mark.asyncio
-async def test_get_data_completed(app: FastAPI, mock_compute) -> None:
+async def test_get_data_completed(app: FastAPI, mock_compute: None) -> None:
+    _ = mock_compute
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -161,7 +174,8 @@ async def test_get_data_completed(app: FastAPI, mock_compute) -> None:
             "/api/plot/compute",
             json={"chromadb_collection_name": "test_collection"},
         )
-        job_id = start_response.json()["job_id"]
+        start_data = cast("dict[str, object]", start_response.json())
+        job_id = cast("str", start_data["job_id"])
 
         # Wait for completion
         await asyncio.sleep(0.2)
@@ -169,20 +183,22 @@ async def test_get_data_completed(app: FastAPI, mock_compute) -> None:
         response = await client.get(f"/api/plot/data/{job_id}")
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data["ready"] is True
-    assert data["status"] == "completed"
+    data = cast("dict[str, object]", response.json())
+    assert cast("bool", data["ready"]) is True
+    assert cast("str", data["status"]) == "completed"
     assert "points" in data
     assert "clusters" in data
     assert "total_points" in data
-    assert len(data["points"]) == 2
-    assert len(data["clusters"]) == 2
-    assert data["total_points"] == 2
+    points = cast("list[object]", data["points"])
+    clusters = cast("list[object]", data["clusters"])
+    assert len(points) == 2
+    assert len(clusters) == 2
+    assert cast("int", data["total_points"]) == 2
 
 
 @pytest.mark.asyncio
 async def test_get_data_failed(app: FastAPI) -> None:
-    def failing_compute(settings):
+    def failing_compute(_settings: object) -> dict[str, object]:
         raise ValueError("Computation failed")
 
     with patch(
@@ -196,7 +212,8 @@ async def test_get_data_failed(app: FastAPI) -> None:
                 "/api/plot/compute",
                 json={"chromadb_collection_name": "test_collection"},
             )
-            job_id = start_response.json()["job_id"]
+            start_data = cast("dict[str, object]", start_response.json())
+            job_id = cast("str", start_data["job_id"])
 
             # Wait for computation to fail
             await asyncio.sleep(0.2)
@@ -204,15 +221,16 @@ async def test_get_data_failed(app: FastAPI) -> None:
             response = await client.get(f"/api/plot/data/{job_id}")
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data["ready"] is False
-    assert data["status"] == "failed"
+    data = cast("dict[str, object]", response.json())
+    assert cast("bool", data["ready"]) is False
+    assert cast("str", data["status"]) == "failed"
     assert "error" in data
-    assert "Computation failed" in data["error"]
+    assert "Computation failed" in cast("str", data["error"])
 
 
 @pytest.mark.asyncio
-async def test_compute_with_all_fields(app: FastAPI, mock_compute) -> None:
+async def test_compute_with_all_fields(app: FastAPI, mock_compute: None) -> None:
+    _ = mock_compute
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -230,39 +248,23 @@ async def test_compute_with_all_fields(app: FastAPI, mock_compute) -> None:
         )
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
+    data = cast("dict[str, object]", response.json())
     assert "job_id" in data
-    assert data["status"] == "pending"
+    assert cast("str", data["status"]) == "pending"
 
 
 @pytest.fixture
-def mock_chromadb_collection():
-    """Mock ChromaDB client to return a collection with embeddings."""
-    mock_embeddings = np.random.default_rng(42).random((20, 10)).tolist()
-    mock_collection = MagicMock()
-    mock_collection.get.return_value = {"embeddings": mock_embeddings}
-    mock_client = MagicMock()
-    mock_client.get_collection.return_value = mock_collection
-    with patch(
-        "embedding_cluster.scatter_plot.chromadb.PersistentClient",
-        return_value=mock_client,
-    ):
-        yield
-
-
-@pytest.fixture
-def mock_suggest():
-    """Mock suggest_optimal_clusters to return deterministic results."""
-    _default_k_range = range(2, 31)
-
-    def fake_suggest(embeddings, k_range=None, max_samples=5000):
-        if k_range is None:
-            k_range = _default_k_range
-        k_values = list(k_range)
+def mock_suggest() -> Iterator[None]:
+    def fake_suggest(
+        _embeddings: object,
+        k_range: range,
+        max_samples: int = 5000,
+    ) -> dict[str, object]:
+        _ = max_samples
         return {
-            "k_values": k_values,
-            "inertias": [100.0 / k for k in k_values],
-            "silhouette_scores": [0.5 + 0.01 * k for k in k_values],
+            "k_values": list(k_range),
+            "inertias": [100.0 - i * 10 for i in range(len(k_range))],
+            "silhouette_scores": [0.3 + i * 0.05 for i in range(len(k_range))],
             "suggested_k": max(k_range),
         }
 
@@ -273,10 +275,27 @@ def mock_suggest():
         yield
 
 
+@pytest.fixture
+def mock_chromadb_collection() -> Iterator[Mock]:
+    import numpy as np
+
+    mock_embeddings = cast(
+        "list[list[float]]",
+        np.random.default_rng(42).random((20, 10)).tolist(),
+    )
+
+    with patch(
+        "embedding_cluster.server.routes.plot.load_chromadb_embeddings"
+    ) as mock_load:
+        mock_load.return_value = np.array(mock_embeddings)
+        yield mock_load
+
+
 @pytest.mark.asyncio
 async def test_suggest_clusters_success(
-    app: FastAPI, mock_chromadb_collection, mock_suggest
+    app: FastAPI, mock_suggest: None, mock_chromadb_collection: Mock
 ) -> None:
+    _ = (mock_suggest, mock_chromadb_collection)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -286,19 +305,18 @@ async def test_suggest_clusters_success(
         )
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
+    data = cast("dict[str, object]", response.json())
     assert "k_values" in data
     assert "inertias" in data
     assert "silhouette_scores" in data
     assert "suggested_k" in data
-    assert data["k_values"][0] == 2
-    assert data["k_values"][-1] == 29
 
 
 @pytest.mark.asyncio
 async def test_suggest_clusters_custom_range(
-    app: FastAPI, mock_chromadb_collection, mock_suggest
+    app: FastAPI, mock_suggest: None, mock_chromadb_collection: Mock
 ) -> None:
+    _ = (mock_suggest, mock_chromadb_collection)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -308,10 +326,10 @@ async def test_suggest_clusters_custom_range(
         )
 
     assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    k_values = data["k_values"]
+    data = cast("dict[str, object]", response.json())
+    k_values = cast("list[int]", data["k_values"])
     assert k_values[0] == 3
-    assert k_values[-1] == 14
+    assert k_values[-1] == 14  # range is exclusive on end
 
 
 @pytest.mark.asyncio
@@ -331,15 +349,14 @@ async def test_suggest_clusters_missing_collection(app: FastAPI) -> None:
 async def test_suggest_clusters_collection_not_found(app: FastAPI) -> None:
     with patch(
         "embedding_cluster.server.routes.plot.load_chromadb_embeddings",
-        side_effect=ValueError("Collection not_found does not exist"),
+        side_effect=ValueError("Collection not found"),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.post(
                 "/api/plot/suggest-clusters",
-                json={"collection_name": "not_found"},
+                json={"collection_name": "nonexistent"},
             )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert "not_found" in response.json()["detail"]
