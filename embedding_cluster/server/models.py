@@ -8,6 +8,8 @@ from pydantic import BaseModel
 class CollectionInfo(BaseModel):
     name: str
     count: int
+    model_name: str | None = None
+    model_type: str | None = None
 
 
 class CollectionDetail(BaseModel):

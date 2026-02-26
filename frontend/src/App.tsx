@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
-import CollectionsPage from './pages/CollectionsPage'
+import HomePage from './pages/HomePage'
 import IndexPage from './pages/IndexPage'
 import PlotPage from './pages/PlotPage'
 
@@ -25,13 +25,13 @@ function NavBar() {
             </Link>
             <div className="ml-10 flex items-baseline space-x-4">
               <NavLink to="/" end className={linkClass}>
+                Home
+              </NavLink>
+              <NavLink to="/index" className={linkClass}>
                 Index
               </NavLink>
               <NavLink to="/plot" className={linkClass}>
                 Plot
-              </NavLink>
-              <NavLink to="/collections" className={linkClass}>
-                Collections
               </NavLink>
             </div>
           </div>
@@ -49,9 +49,9 @@ export default function App() {
           <NavBar />
           <main>
             <Routes>
-              <Route path="/" element={<IndexPage />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/index" element={<IndexPage />} />
               <Route path="/plot" element={<PlotPage />} />
-              <Route path="/collections" element={<CollectionsPage />} />
             </Routes>
           </main>
         </div>
