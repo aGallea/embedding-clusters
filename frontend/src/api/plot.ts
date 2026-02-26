@@ -1,4 +1,4 @@
-import type { IndexStartResponse, PlotRequest, PlotResponse, SearchRequest, SearchResponse } from "../types";
+import type { IndexStartResponse, PlotRequest, PlotResponse, SearchRequest, SearchResponse, SuggestClustersRequest, SuggestClustersResponse } from "../types";
 import { apiFetch, apiPost } from "./client";
 
 export async function startPlotCompute(
@@ -19,4 +19,10 @@ export async function searchCollection(
   request: SearchRequest,
 ): Promise<SearchResponse> {
   return apiPost<SearchResponse>("/search", request);
+}
+
+export async function suggestClusters(
+  request: SuggestClustersRequest,
+): Promise<SuggestClustersResponse> {
+  return apiPost<SuggestClustersResponse>("/plot/suggest-clusters", request);
 }

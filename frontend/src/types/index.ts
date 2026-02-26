@@ -90,6 +90,20 @@ export interface PlotResponse {
   total_points: number;
 }
 
+// Cluster Suggestion
+export interface SuggestClustersRequest {
+  collection_name: string;
+  k_min?: number;
+  k_max?: number;
+}
+
+export interface SuggestClustersResponse {
+  k_values: number[];
+  inertias: number[];
+  silhouette_scores: number[];
+  suggested_k: number;
+}
+
 // Messages
 export interface MessageResponse {
   message: string;
