@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel
 
 
@@ -93,7 +91,7 @@ class PlotPoint(BaseModel):
     y: float
     z: float
     cluster: int
-    metadata: dict[str, Any]
+    metadata: dict[str, object]
     id: str
 
 
@@ -113,7 +111,7 @@ class PlotResponse(BaseModel):
 class SearchResult(BaseModel):
     id: str
     distance: float
-    metadata: dict[str, Any]
+    metadata: dict[str, object]
 
 
 class SearchRequest(BaseModel):
