@@ -2,6 +2,8 @@
 export interface CollectionInfo {
   name: string;
   count: number;
+  model_name: string | null;
+  model_type: string | null;
 }
 
 export interface CollectionDetail {
