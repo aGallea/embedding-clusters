@@ -11,9 +11,12 @@ from dash import Dash, Input, Output, callback, dcc, html, no_update
 from openai import OpenAI
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
+from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chromadb.api import ClientAPI
 
     from embedding_cluster.settings import Settings
@@ -40,7 +43,7 @@ def gpt_get_cluster_name(info: str, settings: Settings) -> str:
     completion = openai_client.chat.completions.create(
         model=settings.gpt_default_model,
         temperature=settings.gpt_default_temperature,
-        messages=messages,  # type: ignore[arg-type]
+        messages=messages,  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
     )
     content = completion.choices[0].message.content or ""
     return (content[:30] + "..") if len(content) > 30 else content
@@ -51,7 +54,78 @@ def load_chromadb_collection(settings: Settings) -> Any:
     collection = chromadb_client.get_or_create_collection(
         settings.chromadb_collection_name
     )
-    return collection.get(include=["embeddings", "metadatas"])  # type: ignore[list-item]
+    return collection.get(include=["embeddings", "metadatas"])  # type: ignore[list-item]  # pyright: ignore[reportArgumentType]
+
+
+def load_chromadb_embeddings(collection_name: str) -> np.ndarray:
+    """Load embeddings from a ChromaDB collection by name."""
+    chromadb_client: ClientAPI = chromadb.PersistentClient(path="./chromadb")
+    try:
+        collection = chromadb_client.get_collection(collection_name)
+    except Exception as exc:
+        msg = f"Collection '{collection_name}' not found"
+        raise ValueError(msg) from exc
+    result = collection.get(include=["embeddings"])  # type: ignore[list-item]  # pyright: ignore[reportArgumentType]
+    embeddings = result.get("embeddings")
+    if embeddings is None:
+        msg = f"No embeddings found in collection '{collection_name}'"
+        raise ValueError(msg)
+    return np.array(embeddings)
+
+
+def suggest_optimal_clusters(
+    embeddings: np.ndarray,
+    k_range: range = range(2, 31),
+    max_samples: int = 5000,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Run elbow method and silhouette analysis to suggest optimal k."""
+    random_state = 171
+
+    if len(embeddings) > max_samples:
+        rng = np.random.default_rng(random_state)
+        indices = rng.choice(len(embeddings), size=max_samples, replace=False)
+        sampled = embeddings[indices]
+    else:
+        sampled = embeddings
+
+    scaled = StandardScaler().fit_transform(sampled)
+
+    k_values: list[int] = []
+    inertias: list[float] = []
+    silhouette_scores_list: list[float] = []
+
+    for k in k_range:
+        kmeans = KMeans(
+            n_clusters=k,
+            n_init="auto",
+            random_state=random_state,
+            max_iter=1000,
+        )
+        labels = kmeans.fit_predict(scaled)
+        k_values.append(k)
+        inertia = kmeans.inertia_
+        if inertia is None:
+            inertia = 0.0
+        inertias.append(float(inertia))
+        silhouette_scores_list.append(float(silhouette_score(scaled, labels)))
+        if on_progress is not None:
+            on_progress(
+                {
+                    "phase": "analyzing",
+                    "current_k": k,
+                    "total_k": len(k_range),
+                }
+            )
+
+    suggested_k = k_values[int(np.argmax(silhouette_scores_list))]
+
+    return {
+        "k_values": k_values,
+        "inertias": inertias,
+        "silhouette_scores": silhouette_scores_list,
+        "suggested_k": suggested_k,
+    }
 
 
 def get_field_as_list(metadata: list[dict[str, Any]], field_name: str) -> list[Any]:

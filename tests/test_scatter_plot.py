@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-
-if TYPE_CHECKING:
-    import pytest
+import pytest
 
 from embedding_cluster.settings import Settings
 
@@ -262,3 +259,164 @@ class TestPrepareData:
         # Cleanup
         sp.cluster_images = []
         sp.cluster_item_names = []
+
+
+class TestLoadChromadbEmbeddings:
+    def test_load_success(self) -> None:
+        from embedding_cluster.scatter_plot import load_chromadb_embeddings
+
+        with patch("embedding_cluster.scatter_plot.chromadb") as mock_chromadb:
+            mock_client = MagicMock()
+            mock_collection = MagicMock()
+            mock_collection.get.return_value = {
+                "embeddings": [[1.0, 2.0], [3.0, 4.0]],
+            }
+            mock_client.get_collection.return_value = mock_collection
+            mock_chromadb.PersistentClient.return_value = mock_client
+
+            result = load_chromadb_embeddings("test_collection")
+
+        assert result.shape == (2, 2)
+        np.testing.assert_array_equal(result, [[1.0, 2.0], [3.0, 4.0]])
+
+    def test_collection_not_found(self) -> None:
+        from embedding_cluster.scatter_plot import load_chromadb_embeddings
+
+        with patch("embedding_cluster.scatter_plot.chromadb") as mock_chromadb:
+            mock_client = MagicMock()
+            mock_client.get_collection.side_effect = Exception("not found")
+            mock_chromadb.PersistentClient.return_value = mock_client
+
+            with pytest.raises(ValueError, match="not found"):
+                load_chromadb_embeddings("nonexistent")
+
+    def test_no_embeddings(self) -> None:
+        from embedding_cluster.scatter_plot import load_chromadb_embeddings
+
+        with patch("embedding_cluster.scatter_plot.chromadb") as mock_chromadb:
+            mock_client = MagicMock()
+            mock_collection = MagicMock()
+            mock_collection.get.return_value = {"embeddings": None}
+            mock_client.get_collection.return_value = mock_collection
+            mock_chromadb.PersistentClient.return_value = mock_client
+
+            with pytest.raises(ValueError, match="No embeddings found"):
+                load_chromadb_embeddings("empty_collection")
+
+
+class TestSuggestOptimalClusters:
+    def test_suggest_optimal_clusters_progress_callback(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        cluster1 = rng.normal(loc=0.0, scale=0.1, size=(20, 10))
+        cluster2 = rng.normal(loc=5.0, scale=0.1, size=(20, 10))
+        cluster3 = rng.normal(loc=10.0, scale=0.1, size=(20, 10))
+        embeddings = np.vstack([cluster1, cluster2, cluster3])
+
+        progress_updates: list[dict[str, object]] = []
+
+        def on_progress(info: dict[str, object]) -> None:
+            progress_updates.append(info)
+
+        result = suggest_optimal_clusters(
+            embeddings, k_range=range(2, 6), on_progress=on_progress
+        )
+
+        assert result["suggested_k"] in list(range(2, 6))
+        assert len(progress_updates) == 4
+        assert progress_updates[0]["phase"] == "analyzing"
+        assert progress_updates[0]["current_k"] == 2
+        assert progress_updates[0]["total_k"] == 4
+        assert progress_updates[-1]["current_k"] == 5
+
+    def test_returns_correct_structure(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        cluster1 = rng.normal(loc=0.0, scale=0.1, size=(20, 10))
+        cluster2 = rng.normal(loc=5.0, scale=0.1, size=(20, 10))
+        cluster3 = rng.normal(loc=10.0, scale=0.1, size=(20, 10))
+        embeddings = np.vstack([cluster1, cluster2, cluster3])
+
+        result = suggest_optimal_clusters(embeddings, k_range=range(2, 11))
+
+        assert "k_values" in result
+        assert "inertias" in result
+        assert "silhouette_scores" in result
+        assert "suggested_k" in result
+        assert result["k_values"] == list(range(2, 11))
+        assert len(result["inertias"]) == 9
+        assert len(result["silhouette_scores"]) == 9
+
+    def test_silhouette_scores_in_range(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((60, 10))
+
+        result = suggest_optimal_clusters(embeddings, k_range=range(2, 11))
+
+        for score in result["silhouette_scores"]:
+            assert -1.0 <= score <= 1.0
+
+    def test_suggested_k_within_range(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((60, 10))
+
+        result = suggest_optimal_clusters(embeddings, k_range=range(2, 11))
+
+        assert 2 <= result["suggested_k"] <= 10
+
+    def test_inertia_monotonically_decreasing(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((60, 10))
+
+        result = suggest_optimal_clusters(embeddings, k_range=range(2, 11))
+
+        inertias = result["inertias"]
+        for i in range(1, len(inertias)):
+            assert inertias[i] <= inertias[i - 1]
+
+    def test_single_k_value(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((20, 10))
+
+        result = suggest_optimal_clusters(embeddings, k_range=range(5, 6))
+
+        assert result["k_values"] == [5]
+        assert len(result["inertias"]) == 1
+        assert len(result["silhouette_scores"]) == 1
+        assert result["suggested_k"] == 5
+
+    def test_well_separated_clusters_suggest_correct_k(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        cluster1 = rng.normal(loc=0.0, scale=0.1, size=(30, 10))
+        cluster2 = rng.normal(loc=10.0, scale=0.1, size=(30, 10))
+        cluster3 = rng.normal(loc=20.0, scale=0.1, size=(30, 10))
+        embeddings = np.vstack([cluster1, cluster2, cluster3])
+
+        result = suggest_optimal_clusters(embeddings, k_range=range(2, 11))
+
+        assert result["suggested_k"] == 3
+
+    def test_large_dataset_uses_sample(self) -> None:
+        from embedding_cluster.scatter_plot import suggest_optimal_clusters
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((10000, 10))
+
+        result = suggest_optimal_clusters(
+            embeddings, k_range=range(2, 6), max_samples=500
+        )
+
+        assert result["k_values"] == list(range(2, 6))
+        assert 2 <= result["suggested_k"] <= 5

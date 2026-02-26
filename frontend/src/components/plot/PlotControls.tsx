@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { fetchCollections, fetchCollection } from '../../api/collections'
 import { usePlotStore } from '../../stores/plotStore'
 import type { PlotRequest } from '../../types'
+import ClusterSuggestion from './ClusterSuggestion'
 
 interface PlotControlsProps {
   onCompute: (params: PlotRequest) => void
@@ -107,6 +108,10 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
               value={numClusters}
               onChange={(e) => setNumClusters(Number(e.target.value))}
               className="w-full"
+            />
+            <ClusterSuggestion
+              collectionName={selectedCollection}
+              onApply={(k) => setNumClusters(k)}
             />
           </div>
 

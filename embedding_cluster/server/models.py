@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel
 
 
@@ -75,12 +73,35 @@ class PlotRequest(BaseModel):
     gpt_default_temperature: float = 0.51
 
 
+class SuggestClustersRequest(BaseModel):
+    collection_name: str
+    k_min: int = 2
+    k_max: int = 30
+
+
+class SuggestClustersResponse(BaseModel):
+    k_values: list[int]
+    inertias: list[float]
+    silhouette_scores: list[float]
+    suggested_k: int
+
+
+class SuggestClustersStatusResponse(BaseModel):
+    status: str
+    ready: bool
+    phase: str | None = None
+    current_k: int | None = None
+    total_k: int | None = None
+    result: SuggestClustersResponse | None = None
+    error: str | None = None
+
+
 class PlotPoint(BaseModel):
     x: float
     y: float
     z: float
     cluster: int
-    metadata: dict[str, Any]
+    metadata: dict[str, object]
     id: str
 
 
@@ -100,7 +121,7 @@ class PlotResponse(BaseModel):
 class SearchResult(BaseModel):
     id: str
     distance: float
-    metadata: dict[str, Any]
+    metadata: dict[str, object]
 
 
 class SearchRequest(BaseModel):
