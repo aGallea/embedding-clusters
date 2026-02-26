@@ -75,6 +75,19 @@ class PlotRequest(BaseModel):
     gpt_default_temperature: float = 0.51
 
 
+class SuggestClustersRequest(BaseModel):
+    collection_name: str
+    k_min: int = 2
+    k_max: int = 30
+
+
+class SuggestClustersResponse(BaseModel):
+    k_values: list[int]
+    inertias: list[float]
+    silhouette_scores: list[float]
+    suggested_k: int
+
+
 class PlotPoint(BaseModel):
     x: float
     y: float

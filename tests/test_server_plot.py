@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
@@ -232,3 +233,113 @@ async def test_compute_with_all_fields(app: FastAPI, mock_compute) -> None:
     data = response.json()
     assert "job_id" in data
     assert data["status"] == "pending"
+
+
+@pytest.fixture
+def mock_chromadb_collection():
+    """Mock ChromaDB client to return a collection with embeddings."""
+    mock_embeddings = np.random.default_rng(42).random((20, 10)).tolist()
+    mock_collection = MagicMock()
+    mock_collection.get.return_value = {"embeddings": mock_embeddings}
+    mock_client = MagicMock()
+    mock_client.get_collection.return_value = mock_collection
+    with patch(
+        "embedding_cluster.scatter_plot.chromadb.PersistentClient",
+        return_value=mock_client,
+    ):
+        yield
+
+
+@pytest.fixture
+def mock_suggest():
+    """Mock suggest_optimal_clusters to return deterministic results."""
+    _default_k_range = range(2, 31)
+
+    def fake_suggest(embeddings, k_range=None, max_samples=5000):
+        if k_range is None:
+            k_range = _default_k_range
+        k_values = list(k_range)
+        return {
+            "k_values": k_values,
+            "inertias": [100.0 / k for k in k_values],
+            "silhouette_scores": [0.5 + 0.01 * k for k in k_values],
+            "suggested_k": max(k_range),
+        }
+
+    with patch(
+        "embedding_cluster.server.routes.plot.suggest_optimal_clusters",
+        side_effect=fake_suggest,
+    ):
+        yield
+
+
+@pytest.mark.asyncio
+async def test_suggest_clusters_success(
+    app: FastAPI, mock_chromadb_collection, mock_suggest
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/plot/suggest-clusters",
+            json={"collection_name": "test_collection"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert "k_values" in data
+    assert "inertias" in data
+    assert "silhouette_scores" in data
+    assert "suggested_k" in data
+    assert data["k_values"][0] == 2
+    assert data["k_values"][-1] == 29
+
+
+@pytest.mark.asyncio
+async def test_suggest_clusters_custom_range(
+    app: FastAPI, mock_chromadb_collection, mock_suggest
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/plot/suggest-clusters",
+            json={"collection_name": "test_collection", "k_min": 3, "k_max": 15},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    k_values = data["k_values"]
+    assert k_values[0] == 3
+    assert k_values[-1] == 14
+
+
+@pytest.mark.asyncio
+async def test_suggest_clusters_missing_collection(app: FastAPI) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/plot/suggest-clusters",
+            json={},
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.asyncio
+async def test_suggest_clusters_collection_not_found(app: FastAPI) -> None:
+    with patch(
+        "embedding_cluster.server.routes.plot.load_chromadb_embeddings",
+        side_effect=ValueError("Collection not_found does not exist"),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/plot/suggest-clusters",
+                json={"collection_name": "not_found"},
+            )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert "not_found" in response.json()["detail"]
