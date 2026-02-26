@@ -25,10 +25,19 @@ def _get_chromadb_client() -> ClientAPI:
 async def list_collections() -> list[CollectionInfo]:
     client = _get_chromadb_client()
     collection_names = client.list_collections()
-    return [
-        CollectionInfo(name=c, count=client.get_collection(c).count())
-        for c in collection_names
-    ]
+    results: list[CollectionInfo] = []
+    for name in collection_names:
+        collection = client.get_collection(name)
+        metadata = collection.metadata or {}
+        results.append(
+            CollectionInfo(
+                name=name,
+                count=collection.count(),
+                model_name=metadata.get("model_name"),
+                model_type=metadata.get("model_type"),
+            )
+        )
+    return results
 
 
 @router.get("/{name}", response_model=CollectionDetail)

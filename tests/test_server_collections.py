@@ -30,9 +30,11 @@ async def test_list_collections(client, mock_chromadb_client):
     """Test GET /api/collections returns list of collections with counts."""
     mock_collection1 = MagicMock()
     mock_collection1.count.return_value = 10
+    mock_collection1.metadata = None
 
     mock_collection2 = MagicMock()
     mock_collection2.count.return_value = 25
+    mock_collection2.metadata = None
 
     mock_chromadb_client.list_collections.return_value = [
         "collection1",
@@ -52,8 +54,62 @@ async def test_list_collections(client, mock_chromadb_client):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
-    assert data[0] == {"name": "collection1", "count": 10}
-    assert data[1] == {"name": "collection2", "count": 25}
+    assert data[0] == {
+        "name": "collection1",
+        "count": 10,
+        "model_name": None,
+        "model_type": None,
+    }
+    assert data[1] == {
+        "name": "collection2",
+        "count": 25,
+        "model_name": None,
+        "model_type": None,
+    }
+
+
+async def test_list_collections_includes_model_metadata(client, mock_chromadb_client):
+    mock_collection = MagicMock()
+    mock_collection.count.return_value = 10
+    mock_collection.metadata = {
+        "model_name": "openai/clip-vit-base-patch32",
+        "model_type": "image",
+    }
+
+    mock_chromadb_client.list_collections.return_value = ["test_col"]
+    mock_chromadb_client.get_collection.return_value = mock_collection
+
+    with patch(
+        "embedding_cluster.server.routes.collections._get_chromadb_client",
+        return_value=mock_chromadb_client,
+    ):
+        response = await client.get("/api/collections")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["model_name"] == "openai/clip-vit-base-patch32"
+    assert data[0]["model_type"] == "image"
+
+
+async def test_list_collections_no_metadata(client, mock_chromadb_client):
+    mock_collection = MagicMock()
+    mock_collection.count.return_value = 5
+    mock_collection.metadata = None
+
+    mock_chromadb_client.list_collections.return_value = ["no_meta"]
+    mock_chromadb_client.get_collection.return_value = mock_collection
+
+    with patch(
+        "embedding_cluster.server.routes.collections._get_chromadb_client",
+        return_value=mock_chromadb_client,
+    ):
+        response = await client.get("/api/collections")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["model_name"] is None
+    assert data[0]["model_type"] is None
 
 
 async def test_get_collection_success(client, mock_chromadb_client):
