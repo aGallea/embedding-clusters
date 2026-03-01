@@ -47,6 +47,21 @@ class TestSettingsDefaults:
         assert s.image_model_name == "openai/clip-vit-base-patch32"
         assert s.text_model_name == "BAAI/bge-small-en-v1.5"
 
+    def test_default_reduction_algorithm(self) -> None:
+        s = Settings()
+        assert s.reduction_algorithm == "tsne"
+
+    def test_default_tsne_params(self) -> None:
+        s = Settings()
+        assert s.tsne_perplexity == pytest.approx(30.0)
+        assert s.tsne_learning_rate == "auto"
+
+    def test_default_umap_params(self) -> None:
+        s = Settings()
+        assert s.umap_n_neighbors == 15
+        assert s.umap_min_dist == pytest.approx(0.1)
+        assert s.umap_metric == "cosine"
+
 
 class TestSettingsEnvVars:
     def test_running_mode_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,3 +102,22 @@ class TestSettingsEnvVars:
         monkeypatch.setenv("LOCAL_CSV_FILENAME", "/tmp/data.csv")
         s = Settings()
         assert s.local_csv_filename == "/tmp/data.csv"
+
+    def test_reduction_algorithm_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("REDUCTION_ALGORITHM", "pca")
+        s = Settings()
+        assert s.reduction_algorithm == "pca"
+
+    def test_tsne_perplexity_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TSNE_PERPLEXITY", "50.0")
+        s = Settings()
+        assert s.tsne_perplexity == pytest.approx(50.0)
+
+    def test_umap_params_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("UMAP_N_NEIGHBORS", "30")
+        monkeypatch.setenv("UMAP_MIN_DIST", "0.5")
+        monkeypatch.setenv("UMAP_METRIC", "euclidean")
+        s = Settings()
+        assert s.umap_n_neighbors == 30
+        assert s.umap_min_dist == pytest.approx(0.5)
+        assert s.umap_metric == "euclidean"
