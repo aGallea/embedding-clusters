@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, field_validator
 
 
 class CollectionInfo(BaseModel):
@@ -71,6 +73,24 @@ class PlotRequest(BaseModel):
     gpt_generate_cluster_name: bool = False
     gpt_default_model: str = "gpt-3.5-turbo"
     gpt_default_temperature: float = 0.51
+    reduction_algorithm: Literal["tsne", "umap", "pca"] = "tsne"
+    tsne_perplexity: float = 30.0
+    tsne_learning_rate: str = "auto"
+    umap_n_neighbors: int = 15
+    umap_min_dist: float = 0.1
+    umap_metric: str = "cosine"
+
+    @field_validator("reduction_algorithm")
+    @classmethod
+    def validate_algorithm(cls, v: str) -> str:
+        allowed = {"tsne", "umap", "pca"}
+        if v not in allowed:
+            msg = (
+                f"Invalid reduction algorithm: '{v}'. "
+                f"Must be one of: {', '.join(sorted(allowed))}"
+            )
+            raise ValueError(msg)
+        return v
 
 
 class SuggestClustersRequest(BaseModel):
