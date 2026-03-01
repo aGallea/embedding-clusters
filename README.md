@@ -20,8 +20,8 @@ A full-stack tool for generating, indexing, and visualizing embedding
 clusters from CSV data. Feed it a CSV with image URLs or text fields,
 and it generates vector embeddings using CLIP (images) and
 SentenceTransformer (text) models, stores them in ChromaDB, clusters
-via k-means, and renders an interactive 3D scatter plot using t-SNE
-dimensionality reduction.
+via k-means, and renders an interactive 3D scatter plot with
+selectable dimensionality reduction (t-SNE, UMAP, or PCA).
 
 The project supports three running modes: CLI-based batch indexing,
 CLI-based Dash visualization, and a full web application with a
@@ -39,7 +39,8 @@ FastAPI backend and React frontend.
   curve) and silhouette score analysis across k=2..30, with an
   interactive chart to review the trade-off before applying.
 * Visualize clustering results in an interactive 3D scatter plot
-  using t-SNE dimensionality reduction.
+  with selectable dimensionality reduction: t-SNE, UMAP, or PCA,
+  each with configurable algorithm-specific parameters.
 * Web UI with FastAPI backend and React frontend for browser-based
   indexing and visualization.
 * Three switchable 3D render modes: colored particles, image sprites,
@@ -71,7 +72,7 @@ FastAPI backend and React frontend.
                        |
             StandardScaler + KMeans
                        |
-                t-SNE (3D projection)
+          t-SNE / UMAP / PCA (3D projection)
                        |
               3D Scatter Plot
            (Dash CLI / React Web UI)
@@ -102,6 +103,9 @@ pre-commit hooks, commitizen
 
 > Models are downloaded from [HuggingFace](https://huggingface.co)
 > on first run. Ensure network access to `huggingface.co`.
+> UMAP support is optional. To install it:
+> `uv sync --extra umap` or `uv pip install umap-learn`.
+> t-SNE and PCA work without extra dependencies.
 
 ## Usage
 
@@ -172,6 +176,12 @@ collection name is the prefix combined with the embedded field name.
 | `GPT_GENERATE_CLUSTER_NAME` | Use GPT to name clusters (needs `OPENAI_API_KEY`) | No | `False` |
 | `GPT_DEFAULT_MODEL` | GPT model for cluster naming | No | `gpt-3.5-turbo` |
 | `GPT_DEFAULT_TEMPERATURE` | GPT temperature for cluster naming | No | `0.51` |
+| `REDUCTION_ALGORITHM` | Dimensionality reduction (`tsne`, `umap`, `pca`) | No | `tsne` |
+| `TSNE_PERPLEXITY` | t-SNE perplexity (5--50) | No | `30.0` |
+| `TSNE_LEARNING_RATE` | t-SNE learning rate (`auto` or numeric) | No | `auto` |
+| `UMAP_N_NEIGHBORS` | UMAP neighbor count (2--100) | No | `15` |
+| `UMAP_MIN_DIST` | UMAP minimum distance (0--1) | No | `0.1` |
+| `UMAP_METRIC` | UMAP distance metric | No | `cosine` |
 
 ```bash
 RUNNING_MODE=PLOT \
