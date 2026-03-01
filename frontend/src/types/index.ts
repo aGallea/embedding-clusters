@@ -58,14 +58,22 @@ export interface IndexStatusResponse {
 }
 
 // Plot
+export type ReductionAlgorithm = 'tsne' | 'umap' | 'pca'
+
 export interface PlotRequest {
-  chromadb_collection_name: string;
-  num_clusters?: number;
-  text_display_fields?: string[];
-  image_field?: string;
-  gpt_generate_cluster_name?: boolean;
-  gpt_default_model?: string;
-  gpt_default_temperature?: number;
+  chromadb_collection_name: string
+  num_clusters?: number
+  text_display_fields?: string[]
+  image_field?: string
+  gpt_generate_cluster_name?: boolean
+  gpt_default_model?: string
+  gpt_default_temperature?: number
+  reduction_algorithm?: ReductionAlgorithm
+  tsne_perplexity?: number
+  tsne_learning_rate?: string
+  umap_n_neighbors?: number
+  umap_min_dist?: number
+  umap_metric?: string
 }
 
 export interface PlotPoint {

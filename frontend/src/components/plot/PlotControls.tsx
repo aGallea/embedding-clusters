@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchCollections, fetchCollection } from '../../api/collections'
 import { usePlotStore } from '../../stores/plotStore'
-import type { PlotRequest } from '../../types'
+import type { PlotRequest, ReductionAlgorithm } from '../../types'
 import ClusterSuggestion from './ClusterSuggestion'
 
 interface PlotControlsProps {
@@ -21,7 +21,15 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
   const [gptModel, setGptModel] = useState('gpt-3.5-turbo')
   const [gptTemperature, setGptTemperature] = useState(0.51)
 
-  const { renderMode, setRenderMode, pointSize, setPointSize } = usePlotStore()
+  const {
+    renderMode, setRenderMode, pointSize, setPointSize,
+    reductionAlgorithm, setReductionAlgorithm,
+    tsnePerplexity, setTsnePerplexity,
+    tsneLearningRate, setTsneLearningRate,
+    umapNNeighbors, setUmapNNeighbors,
+    umapMinDist, setUmapMinDist,
+    umapMetric, setUmapMetric,
+  } = usePlotStore()
 
   // 1. Fetch collection list
   const { data: collections } = useQuery({
@@ -61,6 +69,16 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
       gpt_generate_cluster_name: gptEnabled,
       gpt_default_model: gptEnabled ? gptModel : undefined,
       gpt_default_temperature: gptEnabled ? gptTemperature : undefined,
+      reduction_algorithm: reductionAlgorithm,
+      ...(reductionAlgorithm === 'tsne' && {
+        tsne_perplexity: tsnePerplexity,
+        tsne_learning_rate: tsneLearningRate,
+      }),
+      ...(reductionAlgorithm === 'umap' && {
+        umap_n_neighbors: umapNNeighbors,
+        umap_min_dist: umapMinDist,
+        umap_metric: umapMetric,
+      }),
     }
     onCompute(request)
   }
@@ -113,6 +131,115 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
               collectionName={selectedCollection}
               onApply={(k) => setNumClusters(k)}
             />
+          </div>
+
+          {/* Reduction Algorithm */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Reduction Algorithm
+            </label>
+            <div className="flex space-x-2">
+              {(['tsne', 'umap', 'pca'] as const).map((algo) => (
+                <label key={algo} className="flex items-center text-xs cursor-pointer">
+                  <input
+                    type="radio"
+                    name="reductionAlgorithm"
+                    value={algo}
+                    checked={reductionAlgorithm === algo}
+                    onChange={() => setReductionAlgorithm(algo as ReductionAlgorithm)}
+                    className="mr-1"
+                  />
+                  {algo.toUpperCase()}
+                </label>
+              ))}
+            </div>
+
+            {/* t-SNE parameters */}
+            {reductionAlgorithm === 'tsne' && (
+              <div className="pl-4 space-y-2 border-l-2 border-blue-200 mt-2">
+                <div>
+                  <label className="block text-xs text-gray-500">
+                    Perplexity: {tsnePerplexity}
+                  </label>
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    value={tsnePerplexity}
+                    onChange={(e) => setTsnePerplexity(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500">Learning Rate</label>
+                  <select
+                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                    value={tsneLearningRate}
+                    onChange={(e) => setTsneLearningRate(e.target.value)}
+                  >
+                    <option value="auto">auto</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* UMAP parameters */}
+            {reductionAlgorithm === 'umap' && (
+              <div className="pl-4 space-y-2 border-l-2 border-green-200 mt-2">
+                <div>
+                  <label className="block text-xs text-gray-500">
+                    Neighbors: {umapNNeighbors}
+                  </label>
+                  <input
+                    type="range"
+                    min="2"
+                    max="100"
+                    value={umapNNeighbors}
+                    onChange={(e) => setUmapNNeighbors(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500">
+                    Min Distance: {umapMinDist}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={umapMinDist}
+                    onChange={(e) => setUmapMinDist(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500">Metric</label>
+                  <select
+                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                    value={umapMetric}
+                    onChange={(e) => setUmapMetric(e.target.value)}
+                  >
+                    <option value="cosine">cosine</option>
+                    <option value="euclidean">euclidean</option>
+                    <option value="manhattan">manhattan</option>
+                    <option value="correlation">correlation</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* PCA has no extra parameters */}
+            {reductionAlgorithm === 'pca' && (
+              <p className="text-xs text-gray-400 mt-1">
+                PCA has no additional parameters.
+              </p>
+            )}
           </div>
 
           {/* Text Display Fields */}

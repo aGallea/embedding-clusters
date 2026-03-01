@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PlotResponse, SearchResult } from '../types'
+import type { PlotResponse, ReductionAlgorithm, SearchResult } from '../types'
 
 interface PlotState {
   plotData: PlotResponse | null
@@ -11,6 +11,12 @@ interface PlotState {
   highlightedIds: Set<string>
   isSearching: boolean
   queryPoint: { x: number; y: number; z: number } | null
+  reductionAlgorithm: ReductionAlgorithm
+  tsnePerplexity: number
+  tsneLearningRate: string
+  umapNNeighbors: number
+  umapMinDist: number
+  umapMetric: string
   // actions
   setPlotData: (data: PlotResponse | null) => void
   toggleCluster: (index: number) => void
@@ -23,6 +29,12 @@ interface PlotState {
   setIsSearching: (searching: boolean) => void
   clearSearch: () => void
   setQueryPoint: (point: { x: number; y: number; z: number } | null) => void
+  setReductionAlgorithm: (algorithm: ReductionAlgorithm) => void
+  setTsnePerplexity: (perplexity: number) => void
+  setTsneLearningRate: (rate: string) => void
+  setUmapNNeighbors: (n: number) => void
+  setUmapMinDist: (dist: number) => void
+  setUmapMetric: (metric: string) => void
 }
 
 export const CLUSTER_COLORS = [
@@ -42,6 +54,12 @@ export const usePlotStore = create<PlotState>((set) => ({
   highlightedIds: new Set(),
   isSearching: false,
   queryPoint: null,
+  reductionAlgorithm: 'tsne',
+  tsnePerplexity: 30,
+  tsneLearningRate: 'auto',
+  umapNNeighbors: 15,
+  umapMinDist: 0.1,
+  umapMetric: 'cosine',
 
   setPlotData: (data) => set({ plotData: data }),
 
@@ -80,4 +98,10 @@ export const usePlotStore = create<PlotState>((set) => ({
     isSearching: false,
     queryPoint: null,
   }),
+  setReductionAlgorithm: (algorithm) => set({ reductionAlgorithm: algorithm }),
+  setTsnePerplexity: (perplexity) => set({ tsnePerplexity: perplexity }),
+  setTsneLearningRate: (rate) => set({ tsneLearningRate: rate }),
+  setUmapNNeighbors: (n) => set({ umapNNeighbors: n }),
+  setUmapMinDist: (dist) => set({ umapMinDist: dist }),
+  setUmapMetric: (metric) => set({ umapMetric: metric }),
 }))
