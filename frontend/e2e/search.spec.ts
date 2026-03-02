@@ -41,6 +41,14 @@ test.describe('Semantic Search', () => {
     await expect(searchButton).toBeDisabled()
   })
 
+  test('search bar appears in sidebar after compute', async ({ page }) => {
+    const sidebar = page.getByTestId('plot-sidebar')
+    await expect(sidebar).toBeVisible({ timeout: 5_000 })
+    await expect(
+      sidebar.getByRole('heading', { name: 'Semantic Search' })
+    ).toBeVisible()
+  })
+
   test('text search returns results', async ({ page }) => {
     // Type a search query
     await page.getByPlaceholder('Search by text...').fill('blue shirt')
@@ -52,7 +60,7 @@ test.describe('Semantic Search', () => {
     // Click search
     await searchButton.click()
 
-    // Wait for results to appear -- "Results" heading with count
+    // Wait for results heading
     await expect(
       page.getByRole('heading', { name: /Results \(\d+\)/ })
     ).toBeVisible({ timeout: 30_000 })
@@ -63,9 +71,7 @@ test.describe('Semantic Search', () => {
     ).toBeVisible()
 
     // Result items should be present (at least one)
-    const resultItems = page.locator('button').filter({
-      has: page.locator('.text-xs.text-gray-400'),
-    })
+    const resultItems = page.getByTestId('search-result-item')
     await expect(resultItems.first()).toBeVisible()
   })
 
@@ -114,9 +120,7 @@ test.describe('Semantic Search', () => {
     ).toBeVisible({ timeout: 30_000 })
 
     // Click the first result -- it should get the active style (border-l-2)
-    const firstResult = page.locator('button').filter({
-      has: page.locator('.text-xs.text-gray-400'),
-    }).first()
+    const firstResult = page.getByTestId('search-result-item').first()
     await firstResult.click()
 
     // The clicked result should have the active indicator (blue left border)
@@ -133,20 +137,19 @@ test.describe('Semantic Search', () => {
     ).toBeVisible({ timeout: 30_000 })
 
     // Click a single result first to narrow highlight
-    const firstResult = page.locator('button').filter({
-      has: page.locator('.text-xs.text-gray-400'),
-    }).first()
+    const firstResult = page.getByTestId('search-result-item').first()
     await firstResult.click()
 
     // Now click "Highlight All"
     await page.getByRole('button', { name: 'Highlight All' }).click()
 
     // All result buttons should have the active class
-    const allResults = page.locator('button').filter({
-      has: page.locator('.text-xs.text-gray-400'),
-    })
+    const allResults = page.getByTestId('search-result-item')
     const count = await allResults.count()
     expect(count).toBeGreaterThan(1)
+    for (let i = 0; i < count; i += 1) {
+      await expect(allResults.nth(i)).toHaveClass(/border-blue-500/)
+    }
   })
 
   test('switch to image URL mode', async ({ page }) => {
@@ -170,8 +173,9 @@ test.describe('Semantic Search', () => {
       page.getByText('Results: 10')
     ).toBeVisible()
 
-    // Adjust the slider
-    const slider = page.locator('input[type="range"]').last()
+    // Adjust the search results slider (scoped near its label)
+    const resultsLabel = page.getByText('Results: 10')
+    const slider = resultsLabel.locator('..').locator('input[type="range"]')
     await slider.fill('25')
 
     // Label should update

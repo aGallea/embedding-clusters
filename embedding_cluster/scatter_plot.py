@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from dash import Dash, Input, Output, callback, dcc, html, no_update
 from openai import OpenAI
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
@@ -22,6 +23,52 @@ if TYPE_CHECKING:
     from embedding_cluster.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def reduce_dimensions(
+    embeddings: np.ndarray,
+    algorithm: str = "tsne",
+    n_components: int = 3,
+    random_state: int = 171,
+    **kwargs: Any,
+) -> np.ndarray:
+    """Reduce embedding dimensions using the specified algorithm."""
+    if algorithm == "tsne":
+        perplexity = kwargs.get("perplexity", 30.0)
+        learning_rate = kwargs.get("learning_rate", "auto")
+        reducer = TSNE(
+            n_components=n_components,
+            perplexity=perplexity,
+            learning_rate=learning_rate,
+            random_state=random_state,
+            verbose=1,
+            max_iter=1000,
+        )
+    elif algorithm == "umap":
+        try:
+            import umap
+        except ImportError as exc:
+            msg = (
+                "umap-learn is not installed. Install it with: uv pip install umap-learn"
+            )
+            raise ImportError(msg) from exc
+        n_neighbors = kwargs.get("n_neighbors", 15)
+        min_dist = kwargs.get("min_dist", 0.1)
+        metric = kwargs.get("metric", "cosine")
+        reducer = umap.UMAP(
+            n_components=n_components,
+            n_neighbors=n_neighbors,
+            min_dist=min_dist,
+            metric=metric,
+            random_state=random_state,
+        )
+    elif algorithm == "pca":
+        reducer = PCA(n_components=n_components)
+    else:
+        msg = f"Unknown reduction algorithm: '{algorithm}'. Supported: tsne, umap, pca"
+        raise ValueError(msg)
+    result: np.ndarray = reducer.fit_transform(embeddings)
+    return result
 
 
 def gpt_get_cluster_name(info: str, settings: Settings) -> str:
@@ -196,7 +243,7 @@ cluster_item_names: list[list[str]] = []
 
 
 def compute_plot_data(settings: Settings) -> dict[str, Any]:
-    """Compute t-SNE + k-means and return raw data (no Plotly/Dash)."""
+    """Compute dimensionality reduction + k-means and return raw data."""
     random_state = 171
     n_iter = 1000
     collection_content_text_display: list[str] = []
@@ -211,15 +258,23 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
     collection_content_vectors = collection_content["embeddings"]
     np_embeddings_arr = np.array(collection_content_vectors)
 
-    logger.info("Calculating t-SNE ...")
-    tsne = TSNE(
-        verbose=1,
-        learning_rate="auto",
-        max_iter=n_iter,
-        perplexity=30,
+    algorithm = settings.reduction_algorithm
+    logger.info("Calculating %s ...", algorithm.upper())
+    reduction_kwargs: dict[str, Any] = {}
+    if algorithm == "tsne":
+        reduction_kwargs["perplexity"] = settings.tsne_perplexity
+        reduction_kwargs["learning_rate"] = settings.tsne_learning_rate
+    elif algorithm == "umap":
+        reduction_kwargs["n_neighbors"] = settings.umap_n_neighbors
+        reduction_kwargs["min_dist"] = settings.umap_min_dist
+        reduction_kwargs["metric"] = settings.umap_metric
+    reduced = reduce_dimensions(
+        np_embeddings_arr,
+        algorithm=algorithm,
         n_components=3,
         random_state=random_state,
-    ).fit_transform(np_embeddings_arr)
+        **reduction_kwargs,
+    )
 
     common_params: dict[str, Any] = {
         "n_init": "auto",
@@ -240,6 +295,8 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
     points: list[dict[str, Any]] = []
     clusters: list[dict[str, Any]] = []
 
+    display_fields = settings.text_display_fields or []
+
     for cluster_i in range(num_clusters):
         color = f"hsl({cluster_i * 360 // num_clusters}, 70%, 50%)"
         clusters.append(
@@ -254,7 +311,15 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
         for idx in clusters_indices[cluster_i]:
             metadata: dict[str, Any] = {}
             if idx < len(collection_content["metadatas"]):
-                metadata = dict(collection_content["metadatas"][idx])
+                raw_metadata = dict(collection_content["metadatas"][idx])
+                if display_fields:
+                    metadata = {
+                        key: value
+                        for key, value in raw_metadata.items()
+                        if key in display_fields
+                    }
+                else:
+                    metadata = raw_metadata
             point_id = (
                 collection_content["ids"][idx]
                 if idx < len(collection_content["ids"])
@@ -262,9 +327,9 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
             )
             points.append(
                 {
-                    "x": float(tsne[idx, 0]),
-                    "y": float(tsne[idx, 1]),
-                    "z": float(tsne[idx, 2]),
+                    "x": float(reduced[idx, 0]),
+                    "y": float(reduced[idx, 1]),
+                    "z": float(reduced[idx, 2]),
                     "cluster": cluster_i,
                     "metadata": metadata,
                     "id": point_id,

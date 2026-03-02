@@ -67,8 +67,8 @@ export default function SearchBar({ collectionName }: SearchBarProps) {
   }
 
   return (
-    <div className="space-y-3 p-4 border-t border-gray-200">
-      <h3 className="text-sm font-semibold text-gray-700">Semantic Search</h3>
+    <div className="space-y-2 p-3">
+      <h3 className="text-xs font-semibold text-gray-700">Semantic Search</h3>
 
       <div className="flex space-x-2">
         {(['text', 'image'] as const).map((type) => (
@@ -92,7 +92,7 @@ export default function SearchBar({ collectionName }: SearchBarProps) {
         onChange={(e) => setQueryValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         placeholder={queryType === 'text' ? 'Search by text...' : 'Paste image URL...'}
-        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
       />
 
       <div className="space-y-1">

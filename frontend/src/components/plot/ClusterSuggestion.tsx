@@ -9,9 +9,9 @@ interface ClusterSuggestionProps {
 
 function SuggestionChart({ data }: { data: SuggestClustersResponse }) {
   const { k_values, inertias, silhouette_scores, suggested_k } = data
-  const width = 280
-  const height = 140
-  const padding = { top: 10, right: 35, bottom: 25, left: 40 }
+  const width = 240
+  const height = 110
+  const padding = { top: 8, right: 30, bottom: 22, left: 35 }
   const chartW = width - padding.left - padding.right
   const chartH = height - padding.top - padding.bottom
 
@@ -171,7 +171,7 @@ export default function ClusterSuggestion({ collectionName, onApply }: ClusterSu
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       {data && (
-        <div className="bg-gray-50 rounded border border-gray-200 p-2 space-y-2">
+        <div className="bg-gray-50 rounded border border-gray-200 p-2 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500">
               Recommended: <strong className="text-green-600 text-sm">{data.suggested_k}</strong> clusters

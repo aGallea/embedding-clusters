@@ -36,6 +36,12 @@ async def _run_compute(task_state: TaskState, request: PlotRequest) -> None:
             gpt_generate_cluster_name=request.gpt_generate_cluster_name,
             gpt_default_model=request.gpt_default_model,
             gpt_default_temperature=request.gpt_default_temperature,
+            reduction_algorithm=request.reduction_algorithm,
+            tsne_perplexity=request.tsne_perplexity,
+            tsne_learning_rate=request.tsne_learning_rate,
+            umap_n_neighbors=request.umap_n_neighbors,
+            umap_min_dist=request.umap_min_dist,
+            umap_metric=request.umap_metric,
         )
         task_state.status = TaskStatus.RUNNING
         result = await asyncio.to_thread(compute_plot_data, settings)

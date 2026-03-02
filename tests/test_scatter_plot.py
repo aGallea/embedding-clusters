@@ -230,16 +230,13 @@ class TestPrepareData:
                 "embedding_cluster.scatter_plot.load_chromadb_collection",
                 return_value=fake_collection,
             ),
-            patch("embedding_cluster.scatter_plot.TSNE") as mock_tsne_cls,
+            patch(
+                "embedding_cluster.scatter_plot.reduce_dimensions",
+                return_value=np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
+            ),
             patch("embedding_cluster.scatter_plot.KMeans") as mock_kmeans_cls,
             patch("embedding_cluster.scatter_plot.StandardScaler") as mock_scaler_cls,
         ):
-            mock_tsne = MagicMock()
-            mock_tsne.fit_transform.return_value = np.array(
-                [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
-            )
-            mock_tsne_cls.return_value = mock_tsne
-
             mock_kmeans = MagicMock()
             mock_kmeans.fit_predict.return_value = [0, 0, 1, 1]
             mock_kmeans_cls.return_value = mock_kmeans
@@ -251,7 +248,6 @@ class TestPrepareData:
             mock_scaler_cls.return_value = mock_scaler
 
             fig = prepare_data(settings)
-
         assert isinstance(fig, go.Figure)
         assert len(sp.cluster_images) == 2
         assert len(sp.cluster_item_names) == 2
@@ -420,3 +416,190 @@ class TestSuggestOptimalClusters:
 
         assert result["k_values"] == list(range(2, 6))
         assert 2 <= result["suggested_k"] <= 5
+
+
+class TestReduceDimensions:
+    def test_tsne_output_shape(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((50, 10))
+
+        result = reduce_dimensions(embeddings, algorithm="tsne", n_components=3)
+
+        assert result.shape == (50, 3)
+
+    def test_pca_output_shape(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        result = reduce_dimensions(embeddings, algorithm="pca", n_components=3)
+
+        assert result.shape == (30, 3)
+
+    def test_pca_deterministic(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        result1 = reduce_dimensions(embeddings, algorithm="pca", n_components=3)
+        result2 = reduce_dimensions(embeddings, algorithm="pca", n_components=3)
+
+        np.testing.assert_array_equal(result1, result2)
+
+    def test_tsne_custom_perplexity(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        result = reduce_dimensions(
+            embeddings,
+            algorithm="tsne",
+            n_components=3,
+            perplexity=10.0,
+        )
+
+        assert result.shape == (30, 3)
+
+    def test_umap_output_shape(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        try:
+            result = reduce_dimensions(
+                embeddings,
+                algorithm="umap",
+                n_components=3,
+                n_neighbors=5,
+                min_dist=0.1,
+            )
+            assert result.shape == (30, 3)
+        except ImportError:
+            pytest.skip("umap-learn not installed")
+
+    def test_umap_import_guard(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        with (
+            patch.dict("sys.modules", {"umap": None}),
+            pytest.raises(ImportError, match="umap-learn is not installed"),
+        ):
+            reduce_dimensions(embeddings, algorithm="umap", n_components=3)
+
+    def test_invalid_algorithm_raises(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        with pytest.raises(ValueError, match="Unknown reduction algorithm"):
+            reduce_dimensions(embeddings, algorithm="invalid", n_components=3)
+
+    def test_pca_two_components(self) -> None:
+        from embedding_cluster.scatter_plot import reduce_dimensions
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((30, 10))
+
+        result = reduce_dimensions(embeddings, algorithm="pca", n_components=2)
+
+        assert result.shape == (30, 2)
+
+
+class TestComputePlotData:
+    def test_filters_metadata_to_display_fields(self) -> None:
+        from embedding_cluster.scatter_plot import compute_plot_data
+        from embedding_cluster.settings import Settings
+
+        collection_content = {
+            "ids": ["1", "2"],
+            "embeddings": [[0.1, 0.2], [0.3, 0.4]],
+            "metadatas": [
+                {"name": "item1", "imageUrl": "url1", "category": "a"},
+                {"name": "item2", "imageUrl": "url2", "category": "b"},
+            ],
+        }
+
+        settings = Settings(
+            running_mode="PLOT",
+            chromadb_collection_name="test_collection",
+            num_clusters=1,
+            reduction_algorithm="pca",
+            text_display_fields=["name"],
+            image_field="imageUrl",
+        )
+
+        with (
+            patch(
+                "embedding_cluster.scatter_plot.load_chromadb_collection",
+                return_value=collection_content,
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.reduce_dimensions",
+                return_value=np.zeros((2, 3)),
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.KMeans.fit_predict",
+                return_value=np.array([0, 0]),
+            ),
+        ):
+            result = compute_plot_data(settings)
+
+        points = result["points"]
+        assert len(points) == 2
+        assert points[0]["metadata"] == {"name": "item1"}
+        assert points[1]["metadata"] == {"name": "item2"}
+
+    def test_defaults_to_all_metadata_when_no_fields_selected(self) -> None:
+        from embedding_cluster.scatter_plot import compute_plot_data
+        from embedding_cluster.settings import Settings
+
+        collection_content = {
+            "ids": ["1"],
+            "embeddings": [[0.1, 0.2]],
+            "metadatas": [
+                {"name": "item1", "imageUrl": "url1", "category": "a"},
+            ],
+        }
+
+        settings = Settings(
+            running_mode="PLOT",
+            chromadb_collection_name="test_collection",
+            num_clusters=1,
+            reduction_algorithm="pca",
+            text_display_fields=[],
+            image_field="imageUrl",
+        )
+
+        with (
+            patch(
+                "embedding_cluster.scatter_plot.load_chromadb_collection",
+                return_value=collection_content,
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.reduce_dimensions",
+                return_value=np.zeros((1, 3)),
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.KMeans.fit_predict",
+                return_value=np.array([0]),
+            ),
+        ):
+            result = compute_plot_data(settings)
+
+        points = result["points"]
+        assert len(points) == 1
+        assert points[0]["metadata"] == {
+            "name": "item1",
+            "imageUrl": "url1",
+            "category": "a",
+        }

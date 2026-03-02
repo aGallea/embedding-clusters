@@ -66,6 +66,16 @@ class Settings(BaseSettings):
         default=None, description="field name for the image to present on plot"
     )
 
+    reduction_algorithm: str = Field(
+        default="tsne",
+        description="Dimensionality reduction algorithm: tsne, umap, or pca",
+    )
+    tsne_perplexity: float = Field(default=30.0, description="t-SNE perplexity parameter")
+    tsne_learning_rate: str = Field(default="auto", description="t-SNE learning rate")
+    umap_n_neighbors: int = Field(default=15, description="UMAP number of neighbors")
+    umap_min_dist: float = Field(default=0.1, description="UMAP minimum distance")
+    umap_metric: str = Field(default="cosine", description="UMAP distance metric")
+
     gpt_generate_cluster_name: bool = Field(
         default=False, description="Generate cluster names using GPT"
     )
