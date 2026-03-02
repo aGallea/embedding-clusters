@@ -1,10 +1,11 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import PlotControls from '../components/plot/PlotControls'
 import ScatterPlot from '../components/plot/ScatterPlot'
 import ClusterLegend from '../components/plot/ClusterLegend'
 import SearchBar from '../components/plot/SearchBar'
 import SearchResults from '../components/plot/SearchResults'
+
 import { usePlotData } from '../hooks/usePlotData'
 import { usePlotStore } from '../stores/plotStore'
 
@@ -21,24 +22,38 @@ export default function PlotPage() {
 
     if (document.fullscreenElement) {
       document.exitFullscreen()
-      setIsFullscreen(false)
     } else {
       plotContainerRef.current.requestFullscreen()
       setIsFullscreen(true)
     }
   }, [])
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
+
   return (
     <div className="flex flex-col h-screen max-h-[calc(100vh-64px)] overflow-hidden bg-gray-50">
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-80 border-r border-gray-200 bg-white overflow-y-auto shrink-0 z-10 shadow-sm">
-          <PlotControls onCompute={compute} isComputing={isComputing} />
+        <div
+          data-testid="plot-sidebar"
+          className="w-80 border-r border-gray-200 bg-white overflow-y-auto shrink-0 z-10 shadow-sm"
+        >
           {plotData && collectionName && (
             <>
-              <SearchBar collectionName={collectionName} />
+              <div className="px-4 py-3 border-b border-gray-200">
+                <SearchBar collectionName={collectionName} />
+              </div>
               <SearchResults />
             </>
           )}
+          <PlotControls onCompute={compute} isComputing={isComputing} />
         </div>
 
         <div className="flex-1 flex flex-col relative bg-gray-100">

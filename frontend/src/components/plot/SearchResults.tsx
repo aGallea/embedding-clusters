@@ -45,6 +45,7 @@ export default function SearchResults() {
           return (
             <button
               key={result.id}
+              data-testid="search-result-item"
               onClick={() => handleClickResult(result.id)}
               onMouseEnter={() => setHoveredPointId(result.id)}
               onMouseLeave={() => setHoveredPointId(null)}
