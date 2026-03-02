@@ -295,6 +295,8 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
     points: list[dict[str, Any]] = []
     clusters: list[dict[str, Any]] = []
 
+    display_fields = settings.text_display_fields or []
+
     for cluster_i in range(num_clusters):
         color = f"hsl({cluster_i * 360 // num_clusters}, 70%, 50%)"
         clusters.append(
@@ -309,7 +311,15 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
         for idx in clusters_indices[cluster_i]:
             metadata: dict[str, Any] = {}
             if idx < len(collection_content["metadatas"]):
-                metadata = dict(collection_content["metadatas"][idx])
+                raw_metadata = dict(collection_content["metadatas"][idx])
+                if display_fields:
+                    metadata = {
+                        key: value
+                        for key, value in raw_metadata.items()
+                        if key in display_fields
+                    }
+                else:
+                    metadata = raw_metadata
             point_id = (
                 collection_content["ids"][idx]
                 if idx < len(collection_content["ids"])

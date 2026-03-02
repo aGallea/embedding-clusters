@@ -513,3 +513,93 @@ class TestReduceDimensions:
         result = reduce_dimensions(embeddings, algorithm="pca", n_components=2)
 
         assert result.shape == (30, 2)
+
+
+class TestComputePlotData:
+    def test_filters_metadata_to_display_fields(self) -> None:
+        from embedding_cluster.scatter_plot import compute_plot_data
+        from embedding_cluster.settings import Settings
+
+        collection_content = {
+            "ids": ["1", "2"],
+            "embeddings": [[0.1, 0.2], [0.3, 0.4]],
+            "metadatas": [
+                {"name": "item1", "imageUrl": "url1", "category": "a"},
+                {"name": "item2", "imageUrl": "url2", "category": "b"},
+            ],
+        }
+
+        settings = Settings(
+            running_mode="PLOT",
+            chromadb_collection_name="test_collection",
+            num_clusters=1,
+            reduction_algorithm="pca",
+            text_display_fields=["name"],
+            image_field="imageUrl",
+        )
+
+        with (
+            patch(
+                "embedding_cluster.scatter_plot.load_chromadb_collection",
+                return_value=collection_content,
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.reduce_dimensions",
+                return_value=np.zeros((2, 3)),
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.KMeans.fit_predict",
+                return_value=np.array([0, 0]),
+            ),
+        ):
+            result = compute_plot_data(settings)
+
+        points = result["points"]
+        assert len(points) == 2
+        assert points[0]["metadata"] == {"name": "item1"}
+        assert points[1]["metadata"] == {"name": "item2"}
+
+    def test_defaults_to_all_metadata_when_no_fields_selected(self) -> None:
+        from embedding_cluster.scatter_plot import compute_plot_data
+        from embedding_cluster.settings import Settings
+
+        collection_content = {
+            "ids": ["1"],
+            "embeddings": [[0.1, 0.2]],
+            "metadatas": [
+                {"name": "item1", "imageUrl": "url1", "category": "a"},
+            ],
+        }
+
+        settings = Settings(
+            running_mode="PLOT",
+            chromadb_collection_name="test_collection",
+            num_clusters=1,
+            reduction_algorithm="pca",
+            text_display_fields=[],
+            image_field="imageUrl",
+        )
+
+        with (
+            patch(
+                "embedding_cluster.scatter_plot.load_chromadb_collection",
+                return_value=collection_content,
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.reduce_dimensions",
+                return_value=np.zeros((1, 3)),
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.KMeans.fit_predict",
+                return_value=np.array([0]),
+            ),
+        ):
+            result = compute_plot_data(settings)
+
+        points = result["points"]
+        assert len(points) == 1
+        assert points[0]["metadata"] == {
+            "name": "item1",
+            "imageUrl": "url1",
+            "category": "a",
+        }
