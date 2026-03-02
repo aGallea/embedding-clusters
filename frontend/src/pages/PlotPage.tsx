@@ -47,7 +47,7 @@ export default function PlotPage() {
         >
           {plotData && collectionName && (
             <>
-              <div className="px-4 py-3 border-b border-gray-200">
+              <div className="px-3 py-2 border-b border-gray-200">
                 <SearchBar collectionName={collectionName} />
               </div>
               <SearchResults />

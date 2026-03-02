@@ -27,7 +27,7 @@ export default function SearchResults() {
 
   return (
     <div className="border-t border-gray-200 bg-white overflow-y-auto max-h-64">
-      <div className="flex items-center justify-between p-3 border-b border-gray-100">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
         <h3 className="text-sm font-semibold text-gray-700">
           Results ({searchResults.length})
         </h3>
@@ -49,7 +49,7 @@ export default function SearchResults() {
               onClick={() => handleClickResult(result.id)}
               onMouseEnter={() => setHoveredPointId(result.id)}
               onMouseLeave={() => setHoveredPointId(null)}
-              className={`w-full text-left p-3 hover:bg-blue-50 transition-colors flex items-center gap-3 ${
+              className={`w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors flex items-center gap-3 ${
                 isActive ? 'bg-blue-50 border-l-2 border-blue-500' : ''
               }`}
             >
@@ -57,7 +57,7 @@ export default function SearchResults() {
                 <img
                   src={imageUrl}
                   alt=""
-                  className="w-10 h-10 object-cover rounded flex-shrink-0"
+                  className="w-8 h-8 object-cover rounded flex-shrink-0"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                 />
               )}
