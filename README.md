@@ -5,11 +5,7 @@
 Turn raw CSV data into beautiful, interactive embedding clusters with fast
 semantic search and a web UI.
 
-![3D cluster rotation](docs/gifs/plot-rotation-mini.gif)
-
 ![3D cluster plot](docs/screenshots/3d-cluster-plot.png)
-![Semantic search results](docs/screenshots/semantic-search.png)
-![Collections dashboard](docs/screenshots/collections-page.png)
 
 ## Quick Start (Web UI)
 
@@ -21,17 +17,6 @@ RUNNING_MODE=SERVER uv run python -m embedding_cluster
 ```
 
 Open <http://localhost:8000>.
-
-Optional: index sample data if you do not see collections yet:
-
-```bash
-RUNNING_MODE=INDEX \
-  LOCAL_CSV_FILENAME=./embedding_cluster/csv/fashion_small.csv \
-  ID_FIELD=id \
-  TEXT_EMBEDDING_FIELDS='["productDisplayName"]' \
-  CHROMADB_COLLECTION_PREFIX=fashion_ \
-  uv run python -m embedding_cluster
-```
 
 ## Features
 
@@ -47,11 +32,47 @@ RUNNING_MODE=INDEX \
 
 ![Semantic search demo](docs/gifs/semantic-search-mini.gif)
 
-![3D scatter plot overview](docs/screenshots/3d-scatter-plot-overview.png)
-![Index page](docs/screenshots/index-page.png)
 ![Home dashboard](docs/screenshots/home-page.png)
+![Index page config](docs/screenshots/index-page-config.png)
+![Index page progress](docs/screenshots/index-page-progress.png)
+![Semantic search results](docs/screenshots/semantic-search.png)
 
-## Advanced CLI
+## How Things Work
+
+The tool turns a CSV file into an interactive 3D cluster
+visualization in a few steps:
+
+1. **Upload CSV** -- Provide a CSV file containing your data.
+   The web UI lets you drag-and-drop; the CLI accepts a file path.
+2. **Select fields** -- Choose which columns to embed. Text fields
+   (e.g. product names) use a SentenceTransformer model; image URL
+   fields use a CLIP model. You can embed both in the same dataset.
+3. **Model download** -- The selected model is pulled from
+   [HuggingFace](https://huggingface.co) on first use and cached
+   locally for subsequent runs.
+4. **Embedding & storage** -- Each row is converted into a vector
+   embedding by the chosen model. Embeddings are stored in a
+   [ChromaDB](https://www.trychroma.com/) collection for
+   persistent, queryable vector storage.
+5. **Plot configuration** -- Pick a collection, set the number of
+   k-means clusters (or let the tool suggest one), and choose a
+   dimensionality reduction algorithm (t-SNE, UMAP, or PCA).
+6. **3D visualization** -- The reduced vectors are rendered as an
+   interactive 3D scatter plot. Hover for metadata, toggle cluster
+   visibility, switch render modes, or go fullscreen.
+7. **Semantic search** -- Enter a text query or paste an image URL
+   to find the most similar items. Matching points are highlighted
+   directly in the 3D view.
+8. **Cluster groupings** -- Toggle individual clusters on/off to
+   focus on specific groups. Use the optional GPT-powered naming
+   to label each cluster automatically.
+
+```text
+CSV --> Select Fields --> Download Model --> Embed & Store
+  --> Configure Plot --> 3D Visualization --> Search & Explore
+```
+
+## Using CLI
 
 ### Index (CLI)
 
