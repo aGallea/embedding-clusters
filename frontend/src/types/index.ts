@@ -147,3 +147,65 @@ export interface SearchRequest {
 export interface SearchResponse {
   results: SearchResult[];
 }
+
+// Cluster Detail
+export interface ClusterItemResponse {
+  id: string;
+  metadata: Record<string, unknown>;
+  distance_to_centroid: number;
+}
+
+export interface ClusterDetailResponse {
+  cluster_index: number;
+  cluster_name: string;
+  total_items: number;
+  page: number;
+  page_size: number;
+  items: ClusterItemResponse[];
+}
+
+// Sub-Cluster
+export interface SubClusterRequest {
+  num_sub_clusters: number;
+}
+
+export interface SubClusterPoint {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  sub_cluster: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface SubClusterInfo {
+  index: number;
+  count: number;
+  color: string;
+}
+
+export interface SubClusterResponse {
+  parent_cluster_index: number;
+  points: SubClusterPoint[];
+  sub_clusters: SubClusterInfo[];
+  total_points: number;
+}
+
+// Annotations
+export interface AnnotationUpdate {
+  name?: string;
+  notes?: string;
+  tags?: string[];
+}
+
+export interface ClusterAnnotation {
+  name?: string;
+  notes?: string;
+  tags?: string[];
+  updated_at?: string;
+}
+
+export interface AnnotationsResponse {
+  job_id: string;
+  clusters: Record<string, ClusterAnnotation>;
+}
