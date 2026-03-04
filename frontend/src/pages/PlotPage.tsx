@@ -5,13 +5,16 @@ import ScatterPlot from '../components/plot/ScatterPlot'
 import ClusterLegend from '../components/plot/ClusterLegend'
 import SearchBar from '../components/plot/SearchBar'
 import SearchResults from '../components/plot/SearchResults'
+import ClusterDetailDrawer from '../components/plot/ClusterDetailDrawer'
 
 import { usePlotData } from '../hooks/usePlotData'
 import { usePlotStore } from '../stores/plotStore'
 
 export default function PlotPage() {
-  const { compute, isComputing, error } = usePlotData()
+  const { compute, isComputing, error, jobId } = usePlotData()
   const plotData = usePlotStore((state) => state.plotData)
+  const selectedCluster = usePlotStore((state) => state.selectedCluster)
+  const imageField = usePlotStore((state) => state.imageField)
   const plotContainerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [searchParams] = useSearchParams()
@@ -100,6 +103,13 @@ export default function PlotPage() {
                     </svg>
                   )}
                 </button>
+
+                {selectedCluster !== null && jobId && (
+                  <ClusterDetailDrawer
+                    jobId={jobId}
+                    imageField={imageField ?? undefined}
+                  />
+                )}
               </>
             ) : (
               <div className="h-full flex items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
