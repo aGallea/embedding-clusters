@@ -71,10 +71,13 @@ async def get_plot_data(job_id: str) -> dict[str, object]:
         return {"status": "failed", "error": task.error, "ready": False}
     # COMPLETED
     result = cast("dict[str, object]", task.result)
+    # Strip internal fields not meant for the frontend
+    internal_keys = ("embeddings_standardized", "cluster_labels", "point_ids")
+    frontend_result = {k: v for k, v in result.items() if k not in internal_keys}
     return {
         "status": "completed",
         "ready": True,
-        **result,
+        **frontend_result,
     }
 
 

@@ -415,3 +415,49 @@ async def test_suggest_clusters_status_completed(
     result = cast("dict[str, object]", data["result"])
     assert "k_values" in result
     assert "suggested_k" in result
+
+
+@pytest.mark.asyncio
+async def test_get_data_strips_internal_fields(app: FastAPI) -> None:
+    """Internal fields should not leak to the frontend response."""
+
+    def fake_compute_with_internals(_settings: object) -> dict[str, object]:
+        return {
+            "points": [
+                {"x": 1.0, "y": 2.0, "z": 3.0, "cluster": 0, "metadata": {}, "id": "1"},
+            ],
+            "clusters": [{"index": 0, "name": "A", "color": "red", "count": 1}],
+            "total_points": 1,
+            "embeddings_standardized": [[0.1, 0.2]],
+            "cluster_labels": [0],
+            "point_ids": ["1"],
+        }
+
+    with patch(
+        "embedding_cluster.server.routes.plot.compute_plot_data",
+        side_effect=fake_compute_with_internals,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            start_resp = await client.post(
+                "/api/plot/compute",
+                json={"chromadb_collection_name": "test_collection"},
+            )
+            job_id = cast("str", start_resp.json()["job_id"])
+
+            await asyncio.sleep(0.2)
+
+            response = await client.get(f"/api/plot/data/{job_id}")
+
+    assert response.status_code == status.HTTP_200_OK
+    data = cast("dict[str, object]", response.json())
+    assert cast("bool", data["ready"]) is True
+    # Public fields present
+    assert "points" in data
+    assert "clusters" in data
+    assert "total_points" in data
+    # Internal fields stripped
+    assert "embeddings_standardized" not in data
+    assert "cluster_labels" not in data
+    assert "point_ids" not in data
