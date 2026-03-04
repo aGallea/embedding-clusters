@@ -48,6 +48,7 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
     umapNNeighbors, setUmapNNeighbors,
     umapMinDist, setUmapMinDist,
     umapMetric, setUmapMetric,
+    setImageField: setStoreImageField,
   } = usePlotStore()
 
   // 1. Fetch collection list
@@ -76,6 +77,11 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
       if (imgField) setImageField(imgField)
     }
   }, [collectionDetails])
+
+  // Sync local imageField to store for drawer access
+  useEffect(() => {
+    setStoreImageField(imageField || null)
+  }, [imageField, setStoreImageField])
 
   const handleCompute = () => {
     if (!selectedCollection) return

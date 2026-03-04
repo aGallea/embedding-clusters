@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PlotResponse, ReductionAlgorithm, SearchResult } from '../types'
+import type { AnnotationsResponse, ClusterDetailResponse, PlotResponse, ReductionAlgorithm, SearchResult, SubClusterResponse } from '../types'
 
 interface PlotState {
   plotData: PlotResponse | null
@@ -17,6 +17,13 @@ interface PlotState {
   umapNNeighbors: number
   umapMinDist: number
   umapMetric: string
+  selectedCluster: number | null
+  clusterDetail: ClusterDetailResponse | null
+  subClusterData: SubClusterResponse | null
+  annotations: AnnotationsResponse | null
+  isLoadingClusterDetail: boolean
+  isLoadingSubCluster: boolean
+  imageField: string | null
   // actions
   setPlotData: (data: PlotResponse | null) => void
   toggleCluster: (index: number) => void
@@ -35,6 +42,14 @@ interface PlotState {
   setUmapNNeighbors: (n: number) => void
   setUmapMinDist: (dist: number) => void
   setUmapMetric: (metric: string) => void
+  setSelectedCluster: (index: number | null) => void
+  setClusterDetail: (detail: ClusterDetailResponse | null) => void
+  setSubClusterData: (data: SubClusterResponse | null) => void
+  setAnnotations: (annotations: AnnotationsResponse | null) => void
+  setIsLoadingClusterDetail: (loading: boolean) => void
+  setIsLoadingSubCluster: (loading: boolean) => void
+  clearClusterDrillDown: () => void
+  setImageField: (field: string | null) => void
 }
 
 export const CLUSTER_COLORS = [
@@ -60,6 +75,13 @@ export const usePlotStore = create<PlotState>((set) => ({
   umapNNeighbors: 15,
   umapMinDist: 0.1,
   umapMetric: 'cosine',
+  selectedCluster: null,
+  clusterDetail: null,
+  subClusterData: null,
+  annotations: null,
+  isLoadingClusterDetail: false,
+  isLoadingSubCluster: false,
+  imageField: null,
 
   setPlotData: (data) => set({ plotData: data }),
 
@@ -104,4 +126,18 @@ export const usePlotStore = create<PlotState>((set) => ({
   setUmapNNeighbors: (n) => set({ umapNNeighbors: n }),
   setUmapMinDist: (dist) => set({ umapMinDist: dist }),
   setUmapMetric: (metric) => set({ umapMetric: metric }),
+  setSelectedCluster: (index) => set({ selectedCluster: index }),
+  setClusterDetail: (detail) => set({ clusterDetail: detail }),
+  setSubClusterData: (data) => set({ subClusterData: data }),
+  setAnnotations: (annotations) => set({ annotations }),
+  setIsLoadingClusterDetail: (loading) => set({ isLoadingClusterDetail: loading }),
+  setIsLoadingSubCluster: (loading) => set({ isLoadingSubCluster: loading }),
+  setImageField: (field) => set({ imageField: field }),
+  clearClusterDrillDown: () => set({
+    selectedCluster: null,
+    clusterDetail: null,
+    subClusterData: null,
+    isLoadingClusterDetail: false,
+    isLoadingSubCluster: false,
+  }),
 }))
