@@ -96,11 +96,6 @@ export default function ParticleCloud() {
 
   return (
     <group>
-      <group
-        data-testid="particle-selection-overlay"
-        data-count={String(selectedPointIds.size)}
-        visible={false}
-      />
       <points
         ref={pointsRef}
         onPointerMove={handlePointerMove}
@@ -132,7 +127,7 @@ export default function ParticleCloud() {
       </points>
 
       {selectedPositions.length > 0 && (
-        <points data-testid="particle-selection-overlay">
+        <points>
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
