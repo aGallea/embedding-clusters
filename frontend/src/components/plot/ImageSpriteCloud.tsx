@@ -83,6 +83,7 @@ export default function ImageSpriteCloud() {
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
   const highlightedIds = usePlotStore((state) => state.highlightedIds)
+  const selectedPointIds = usePlotStore((state) => state.selectedPointIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
 
   const visiblePoints = useMemo(() => {
@@ -100,6 +101,17 @@ export default function ImageSpriteCloud() {
     })
   }, [visiblePoints, highlightedIds])
 
+  const selectedSprites = useMemo(() => {
+    return visiblePoints
+      .filter((point) => selectedPointIds.has(point.id))
+      .map((point) => ({
+        point,
+        color: '#ffffff',
+        imageUrl: getImageUrl(point.metadata),
+        opacity: 1,
+      }))
+  }, [visiblePoints, selectedPointIds])
+
   if (!plotData) return null
 
   return (
@@ -111,6 +123,19 @@ export default function ImageSpriteCloud() {
             color={color}
             imageUrl={imageUrl}
             size={pointSize}
+            opacity={opacity}
+            onHover={setHoveredPointId}
+          />
+        </Suspense>
+      ))}
+
+      {selectedSprites.map(({ point, color, imageUrl, opacity }) => (
+        <Suspense key={`selected-${point.id}`} fallback={<FallbackSprite point={point} color={color} size={pointSize * 1.4} />}>
+          <PointSprite
+            point={point}
+            color={color}
+            imageUrl={imageUrl}
+            size={pointSize * 1.4}
             opacity={opacity}
             onHover={setHoveredPointId}
           />
