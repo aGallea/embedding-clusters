@@ -3,6 +3,7 @@ import { usePlotStore, CLUSTER_COLORS } from '../../stores/plotStore'
 import { getClusterDetail, updateAnnotation, getAnnotations } from '../../api/plot'
 import type { ClusterDetailResponse } from '../../types'
 import SubClusterView from './SubClusterView'
+import SelectedPointsDistancePanel from './SelectedPointsDistancePanel'
 
 interface ClusterDetailDrawerProps {
   jobId: string
@@ -15,10 +16,13 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const annotations = usePlotStore((s) => s.annotations)
   const isLoadingClusterDetail = usePlotStore((s) => s.isLoadingClusterDetail)
   const plotData = usePlotStore((s) => s.plotData)
+  const selectedPointIds = usePlotStore((s) => s.selectedPointIds)
   const setClusterDetail = usePlotStore((s) => s.setClusterDetail)
   const setAnnotations = usePlotStore((s) => s.setAnnotations)
   const setIsLoadingClusterDetail = usePlotStore((s) => s.setIsLoadingClusterDetail)
   const setHighlightedIds = usePlotStore((s) => s.setHighlightedIds)
+  const clearSelectedPointIds = usePlotStore((s) => s.clearSelectedPointIds)
+  const setSelectedPointIds = usePlotStore((s) => s.setSelectedPointIds)
   const clearClusterDrillDown = usePlotStore((s) => s.clearClusterDrillDown)
 
   const [page, setPage] = useState(1)
@@ -108,13 +112,33 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   }, [jobId, clusterIndex, setAnnotations])
 
   const handleItemClick = useCallback((id: string) => {
-    setHighlightedIds(new Set([id]))
-  }, [setHighlightedIds])
+    const nextSelected = new Set(selectedPointIds)
+    if (nextSelected.has(id)) {
+      nextSelected.delete(id)
+    } else {
+      nextSelected.add(id)
+    }
+    setSelectedPointIds(nextSelected)
+    setHighlightedIds(nextSelected)
+  }, [selectedPointIds, setHighlightedIds, setSelectedPointIds])
+
+  const handleClearSelected = useCallback(() => {
+    clearSelectedPointIds()
+    setHighlightedIds(new Set())
+  }, [clearSelectedPointIds, setHighlightedIds])
+
+  const handleSelectPage = useCallback(() => {
+    if (!clusterDetail) return
+    const pageIds = new Set(clusterDetail.items.map((item) => item.id))
+    setSelectedPointIds(pageIds)
+    setHighlightedIds(pageIds)
+  }, [clusterDetail, setHighlightedIds, setSelectedPointIds])
 
   if (clusterIndex == null) return null
 
   const totalPages = clusterDetail ? Math.ceil(clusterDetail.total_items / clusterDetail.page_size) : 0
   const displayName = annotation?.name ?? cluster?.name ?? `Cluster ${clusterIndex}`
+  const selectedItems = clusterDetail?.items.filter((item) => selectedPointIds.has(item.id)) ?? []
 
   return (
     <div
@@ -177,6 +201,18 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
         >
           Sub-Cluster
         </button>
+        <button
+          onClick={handleClearSelected}
+          className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          Clear selected
+        </button>
+        <button
+          onClick={handleSelectPage}
+          className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          Select page
+        </button>
       </div>
 
       {/* Sub-cluster view */}
@@ -196,17 +232,23 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
 
         {clusterDetail && !isLoadingClusterDetail && (
           <div className="divide-y divide-gray-100">
-            {clusterDetail.items.map((item) => (
+            {clusterDetail.items.map((item) => {
+              const isSelected = selectedPointIds.has(item.id)
+              return (
               <button
                 key={item.id}
                 onClick={() => handleItemClick(item.id)}
-                className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors flex items-center space-x-3"
+                className={`w-full px-4 text-left transition-colors flex items-start space-x-3 ${
+                  isSelected
+                    ? 'py-3 bg-blue-50 border-l-2 border-blue-500'
+                    : 'py-2 hover:bg-blue-50'
+                }`}
               >
                 {imageField && imageField in item.metadata && (
                   <img
                     src={String(item.metadata[imageField])}
                     alt=""
-                    className="w-10 h-10 rounded object-cover shrink-0"
+                    className={`rounded object-cover shrink-0 ${isSelected ? 'w-12 h-12' : 'w-10 h-10'}`}
                     loading="lazy"
                   />
                 )}
@@ -219,7 +261,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
                   </div>
                   {Object.entries(item.metadata)
                     .filter(([k]) => k !== imageField)
-                    .slice(0, 2)
+                    .slice(0, isSelected ? 6 : 2)
                     .map(([key, value]) => (
                       <div key={key} className="text-[10px] text-gray-400 truncate">
                         {key}: {String(value)}
@@ -227,7 +269,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
                     ))}
                 </div>
               </button>
-            ))}
+            )})}
           </div>
         )}
       </div>
@@ -254,6 +296,8 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
           </button>
         </div>
       )}
+
+      <SelectedPointsDistancePanel selectedItems={selectedItems} />
 
       {/* Annotation section */}
       <div className="px-4 py-3 border-t border-gray-200 space-y-2 shrink-0">

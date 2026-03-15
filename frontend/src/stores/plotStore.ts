@@ -26,6 +26,7 @@ interface PlotState {
   imageField: string | null
   plotJobId: string | null
   plotCollectionName: string | null
+  selectedPointIds: Set<string>
   // actions
   setPlotData: (data: PlotResponse | null) => void
   toggleCluster: (index: number) => void
@@ -56,6 +57,9 @@ interface PlotState {
   resetPlotJobId: () => void
   setPlotCollectionName: (name: string | null) => void
   resetPlotCollectionName: () => void
+  toggleSelectedPointId: (id: string) => void
+  clearSelectedPointIds: () => void
+  setSelectedPointIds: (ids: Set<string>) => void
 }
 
 export const CLUSTER_COLORS = [
@@ -90,6 +94,7 @@ export const usePlotStore = create<PlotState>((set) => ({
   imageField: null,
   plotJobId: null,
   plotCollectionName: null,
+  selectedPointIds: new Set(),
 
   setPlotData: (data) => set({ plotData: data }),
 
@@ -145,6 +150,17 @@ export const usePlotStore = create<PlotState>((set) => ({
   resetPlotJobId: () => set({ plotJobId: null }),
   setPlotCollectionName: (name) => set({ plotCollectionName: name }),
   resetPlotCollectionName: () => set({ plotCollectionName: null }),
+  toggleSelectedPointId: (id) => set((state) => {
+    const newSelected = new Set(state.selectedPointIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    return { selectedPointIds: newSelected }
+  }),
+  clearSelectedPointIds: () => set({ selectedPointIds: new Set() }),
+  setSelectedPointIds: (ids) => set({ selectedPointIds: new Set(ids) }),
   clearClusterDrillDown: () => set({
     selectedCluster: null,
     clusterDetail: null,
