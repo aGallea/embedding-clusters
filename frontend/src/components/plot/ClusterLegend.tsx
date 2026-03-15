@@ -14,7 +14,11 @@ export default function ClusterLegend() {
   const handleShowAll = () => resetVisibleClusters(plotData.clusters.length)
 
   return (
-    <div className="bg-white p-4 border-t border-gray-200 overflow-x-auto">
+    <div
+      className="bg-white p-4 border-t border-gray-200 overflow-x-auto relative z-50 pointer-events-auto"
+      onPointerDown={(event) => event.stopPropagation()}
+      data-testid="cluster-legend"
+    >
       <div className="flex items-center space-x-4 mb-2">
         <h3 className="text-sm font-bold text-gray-700">Clusters</h3>
         <button
@@ -68,10 +72,11 @@ export default function ClusterLegend() {
                 )}
               </button>
 
-              <button
-                onClick={() => setSelectedCluster(
-                  isSelected ? null : cluster.index
-                )}
+               <button
+                 data-testid={`cluster-legend-name-${cluster.index}`}
+                 onClick={() => setSelectedCluster(
+                   isSelected ? null : cluster.index
+                 )}
                 className="flex items-center space-x-2 hover:bg-gray-100 rounded px-1 py-0.5 transition-colors"
                 title="View cluster details"
               >

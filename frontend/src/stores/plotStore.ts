@@ -24,6 +24,8 @@ interface PlotState {
   isLoadingClusterDetail: boolean
   isLoadingSubCluster: boolean
   imageField: string | null
+  plotJobId: string | null
+  plotCollectionName: string | null
   // actions
   setPlotData: (data: PlotResponse | null) => void
   toggleCluster: (index: number) => void
@@ -50,6 +52,10 @@ interface PlotState {
   setIsLoadingSubCluster: (loading: boolean) => void
   clearClusterDrillDown: () => void
   setImageField: (field: string | null) => void
+  setPlotJobId: (jobId: string | null) => void
+  resetPlotJobId: () => void
+  setPlotCollectionName: (name: string | null) => void
+  resetPlotCollectionName: () => void
 }
 
 export const CLUSTER_COLORS = [
@@ -82,6 +88,8 @@ export const usePlotStore = create<PlotState>((set) => ({
   isLoadingClusterDetail: false,
   isLoadingSubCluster: false,
   imageField: null,
+  plotJobId: null,
+  plotCollectionName: null,
 
   setPlotData: (data) => set({ plotData: data }),
 
@@ -133,6 +141,10 @@ export const usePlotStore = create<PlotState>((set) => ({
   setIsLoadingClusterDetail: (loading) => set({ isLoadingClusterDetail: loading }),
   setIsLoadingSubCluster: (loading) => set({ isLoadingSubCluster: loading }),
   setImageField: (field) => set({ imageField: field }),
+  setPlotJobId: (jobId) => set({ plotJobId: jobId }),
+  resetPlotJobId: () => set({ plotJobId: null }),
+  setPlotCollectionName: (name) => set({ plotCollectionName: name }),
+  resetPlotCollectionName: () => set({ plotCollectionName: null }),
   clearClusterDrillDown: () => set({
     selectedCluster: null,
     clusterDetail: null,
@@ -141,3 +153,7 @@ export const usePlotStore = create<PlotState>((set) => ({
     isLoadingSubCluster: false,
   }),
 }))
+
+if (typeof window !== 'undefined') {
+  (window as Window & { __plotStore?: typeof usePlotStore }).__plotStore = usePlotStore
+}

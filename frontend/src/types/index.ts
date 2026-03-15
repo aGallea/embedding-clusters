@@ -96,6 +96,7 @@ export interface PlotResponse {
   points: PlotPoint[];
   clusters: PlotCluster[];
   total_points: number;
+  job_id?: string;
 }
 
 // Cluster Suggestion

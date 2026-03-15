@@ -117,7 +117,10 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const displayName = annotation?.name ?? cluster?.name ?? `Cluster ${clusterIndex}`
 
   return (
-    <div className="w-96 bg-white border-l border-gray-200 flex flex-col h-full shadow-lg overflow-hidden">
+    <div
+      className="w-[min(24rem,calc(100vw-20rem))] min-w-[280px] max-w-[24rem] bg-white border-l border-gray-200 flex flex-col h-full shadow-lg overflow-hidden relative z-50 pointer-events-auto"
+      data-testid="cluster-detail-drawer"
+    >
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-2 min-w-0">

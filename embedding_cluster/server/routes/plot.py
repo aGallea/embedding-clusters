@@ -84,6 +84,7 @@ async def get_plot_data(job_id: str) -> dict[str, object]:
     return {
         "status": "completed",
         "ready": True,
+        "job_id": job_id,
         **frontend_result,
     }
 

@@ -49,6 +49,10 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
     umapMinDist, setUmapMinDist,
     umapMetric, setUmapMetric,
     setImageField: setStoreImageField,
+    resetPlotJobId,
+    clearClusterDrillDown,
+    setPlotData,
+    resetVisibleClusters,
   } = usePlotStore()
 
   // 1. Fetch collection list
@@ -85,6 +89,11 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
 
   const handleCompute = () => {
     if (!selectedCollection) return
+
+    resetPlotJobId()
+    clearClusterDrillDown()
+    setPlotData(null)
+    resetVisibleClusters(0)
 
     const request: PlotRequest = {
       chromadb_collection_name: selectedCollection,
