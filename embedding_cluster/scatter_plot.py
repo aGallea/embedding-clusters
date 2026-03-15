@@ -340,6 +340,9 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
         "points": points,
         "clusters": clusters,
         "total_points": len(collection_content["ids"]),
+        "embeddings_standardized": embeddings_standardized.tolist(),
+        "cluster_labels": np.asarray(pred_arr).tolist(),
+        "point_ids": [p["id"] for p in points],
     }
 
 

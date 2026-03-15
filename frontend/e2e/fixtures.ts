@@ -12,7 +12,7 @@ export const test = base.extend<{
 }>({
   plotPage: async ({ page }, use) => {
     // Navigate with collection param so SearchBar renders after compute
-    await page.goto('/plot?collection=fashion_productDisplayName')
+    await page.goto('/plot?collection=fashionimageUrl')
     // Wait for the collection dropdown to be populated with options
     await expect(
       page.locator('select option:not([value=""])').first()

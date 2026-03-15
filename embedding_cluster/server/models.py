@@ -156,3 +156,70 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     results: list[SearchResult]
+
+
+class ClusterItemResponse(BaseModel):
+    id: str
+    metadata: dict[str, object]
+    distance_to_centroid: float
+
+
+class ClusterDetailResponse(BaseModel):
+    cluster_index: int
+    cluster_name: str
+    total_items: int
+    page: int
+    page_size: int
+    items: list[ClusterItemResponse]
+
+
+class SubClusterRequest(BaseModel):
+    num_sub_clusters: int = 3
+
+    @field_validator("num_sub_clusters")
+    @classmethod
+    def validate_num_sub_clusters(cls, v: int) -> int:
+        if v < 2:
+            msg = "num_sub_clusters must be at least 2"
+            raise ValueError(msg)
+        return v
+
+
+class SubClusterPoint(BaseModel):
+    id: str
+    x: float
+    y: float
+    z: float
+    sub_cluster: int
+    metadata: dict[str, object]
+
+
+class SubClusterInfo(BaseModel):
+    index: int
+    count: int
+    color: str
+
+
+class SubClusterResponse(BaseModel):
+    parent_cluster_index: int
+    points: list[SubClusterPoint]
+    sub_clusters: list[SubClusterInfo]
+    total_points: int
+
+
+class AnnotationUpdate(BaseModel):
+    name: str | None = None
+    notes: str | None = None
+    tags: list[str] | None = None
+
+
+class ClusterAnnotation(BaseModel):
+    name: str | None = None
+    notes: str | None = None
+    tags: list[str] | None = None
+    updated_at: str | None = None
+
+
+class AnnotationsResponse(BaseModel):
+    job_id: str
+    clusters: dict[str, ClusterAnnotation]

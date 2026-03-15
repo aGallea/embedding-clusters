@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from embedding_cluster.server.routes.annotations import (
+    router as annotations_router,
+)
 from embedding_cluster.server.routes.collections import (
     router as collections_router,
 )
@@ -44,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(csv_router)
     app.include_router(index_router)
     app.include_router(plot_router)
+    app.include_router(annotations_router)
     app.include_router(search_router)
 
     if FRONTEND_DIR.is_dir():

@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import cast
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException
 
 from embedding_cluster.scatter_plot import (
     compute_plot_data,
     load_chromadb_embeddings,
+    reduce_dimensions,
     suggest_optimal_clusters,
 )
 from embedding_cluster.server.models import (
+    ClusterDetailResponse,
+    ClusterItemResponse,
     IndexStartResponse,
     PlotRequest,
+    SubClusterInfo,
+    SubClusterPoint,
+    SubClusterRequest,
+    SubClusterResponse,
     SuggestClustersRequest,
 )
 from embedding_cluster.server.tasks import TaskState, TaskStatus, task_registry
@@ -71,10 +78,14 @@ async def get_plot_data(job_id: str) -> dict[str, object]:
         return {"status": "failed", "error": task.error, "ready": False}
     # COMPLETED
     result = cast("dict[str, object]", task.result)
+    # Strip internal fields not meant for the frontend
+    internal_keys = ("embeddings_standardized", "cluster_labels", "point_ids")
+    frontend_result = {k: v for k, v in result.items() if k not in internal_keys}
     return {
         "status": "completed",
         "ready": True,
-        **result,
+        "job_id": job_id,
+        **frontend_result,
     }
 
 
@@ -145,3 +156,176 @@ async def get_suggest_clusters_status(job_id: str) -> dict[str, object]:
         "ready": True,
         "result": result,
     }
+
+
+@router.get(
+    "/{job_id}/cluster/{cluster_index}",
+    response_model=ClusterDetailResponse,
+)
+async def get_cluster_detail(
+    job_id: str,
+    cluster_index: int,
+    page: int = 1,
+    page_size: int = 50,
+) -> ClusterDetailResponse:
+    task = task_registry.get(job_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if task.status != TaskStatus.COMPLETED:
+        raise HTTPException(status_code=409, detail="Job not completed")
+
+    result = cast("dict[str, object]", task.result)
+    clusters = cast("list[dict[str, object]]", result["clusters"])
+    cluster_labels = cast("list[int]", result["cluster_labels"])
+    embeddings = cast("list[list[float]]", result["embeddings_standardized"])
+    points = cast("list[dict[str, object]]", result["points"])
+
+    # Validate cluster index
+    cluster_info: dict[str, Any] | None = None
+    for c in clusters:
+        if cast("int", c["index"]) == cluster_index:
+            cluster_info = cast("dict[str, Any]", c)
+            break
+    if cluster_info is None:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # Get indices belonging to this cluster
+    cluster_point_indices = [
+        i for i, label in enumerate(cluster_labels) if label == cluster_index
+    ]
+
+    # Compute centroid
+    import numpy as np
+
+    cluster_embeddings = np.array([embeddings[i] for i in cluster_point_indices])
+    centroid = cluster_embeddings.mean(axis=0)
+
+    # Compute distances and build items
+    items_with_distance: list[tuple[float, dict[str, object]]] = []
+    for idx in cluster_point_indices:
+        point_embedding = np.array(embeddings[idx])
+        distance = float(np.linalg.norm(point_embedding - centroid))
+        point = points[idx]
+        items_with_distance.append((distance, point))
+
+    # Sort by distance
+    items_with_distance.sort(key=lambda x: x[0])
+
+    # Paginate
+    total_items = len(items_with_distance)
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_items = items_with_distance[start:end]
+
+    return ClusterDetailResponse(
+        cluster_index=cluster_index,
+        cluster_name=cast("str", cluster_info["name"]),
+        total_items=total_items,
+        page=page,
+        page_size=page_size,
+        items=[
+            ClusterItemResponse(
+                id=cast("str", point["id"]),
+                metadata=cast("dict[str, object]", point["metadata"]),
+                distance_to_centroid=dist,
+            )
+            for dist, point in page_items
+        ],
+    )
+
+
+@router.post(
+    "/{job_id}/cluster/{cluster_index}/sub-cluster",
+    response_model=SubClusterResponse,
+)
+async def sub_cluster(
+    job_id: str,
+    cluster_index: int,
+    request: SubClusterRequest,
+) -> SubClusterResponse:
+    task = task_registry.get(job_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if task.status != TaskStatus.COMPLETED:
+        raise HTTPException(status_code=409, detail="Job not completed")
+
+    result = cast("dict[str, object]", task.result)
+    clusters = cast("list[dict[str, object]]", result["clusters"])
+    cluster_labels = cast("list[int]", result["cluster_labels"])
+    embeddings = cast("list[list[float]]", result["embeddings_standardized"])
+    points = cast("list[dict[str, object]]", result["points"])
+
+    # Validate cluster exists
+    cluster_exists = any(cast("int", c["index"]) == cluster_index for c in clusters)
+    if not cluster_exists:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # Get indices for this cluster
+    cluster_point_indices = [
+        i for i, label in enumerate(cluster_labels) if label == cluster_index
+    ]
+
+    num_sub = request.num_sub_clusters
+    if num_sub > len(cluster_point_indices):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"num_sub_clusters ({num_sub}) exceeds "
+                f"items in cluster ({len(cluster_point_indices)})"
+            ),
+        )
+
+    # Run k-means on cluster subset
+    import numpy as np
+
+    cluster_embeddings = np.array([embeddings[i] for i in cluster_point_indices])
+
+    def _compute() -> SubClusterResponse:
+        from sklearn.cluster import KMeans
+
+        kmeans = KMeans(
+            n_clusters=num_sub,
+            n_init="auto",
+            random_state=171,
+            max_iter=1000,
+        )
+        sub_labels = kmeans.fit_predict(cluster_embeddings)
+
+        # Reduce dimensions for visualization
+        reduced = reduce_dimensions(
+            cluster_embeddings,
+            algorithm="pca",
+            n_components=3,
+        )
+
+        sub_points: list[SubClusterPoint] = []
+        for j, idx in enumerate(cluster_point_indices):
+            point = points[idx]
+            sub_points.append(
+                SubClusterPoint(
+                    id=cast("str", point["id"]),
+                    x=float(reduced[j, 0]),
+                    y=float(reduced[j, 1]),
+                    z=float(reduced[j, 2]),
+                    sub_cluster=int(sub_labels[j]),
+                    metadata=cast(
+                        "dict[str, object]",
+                        point["metadata"],
+                    ),
+                )
+            )
+
+        sub_cluster_infos: list[SubClusterInfo] = []
+        for si in range(num_sub):
+            count = int(np.sum(sub_labels == si))
+            color = f"hsl({si * 360 // num_sub}, 70%, 50%)"
+            sub_cluster_infos.append(SubClusterInfo(index=si, count=count, color=color))
+
+        return SubClusterResponse(
+            parent_cluster_index=cluster_index,
+            points=sub_points,
+            sub_clusters=sub_cluster_infos,
+            total_points=len(cluster_point_indices),
+        )
+
+    return await asyncio.to_thread(_compute)

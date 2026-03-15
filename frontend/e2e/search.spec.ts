@@ -183,4 +183,28 @@ test.describe('Semantic Search', () => {
       page.getByText('Results: 25')
     ).toBeVisible()
   })
+
+  test('hovering points does not trigger visualization error', async ({ page }) => {
+    const canvas = page.locator('canvas')
+    await expect(canvas).toBeVisible({ timeout: 10_000 })
+
+    const box = await canvas.boundingBox()
+    expect(box).not.toBeNull()
+
+    if (!box) {
+      throw new Error('Canvas bounding box is null')
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const x = Math.floor(box.x + box.width * (0.25 + (i % 4) * 0.15))
+      const y = Math.floor(box.y + box.height * (0.25 + Math.floor(i / 4) * 0.2))
+      await page.mouse.move(x, y)
+      await page.mouse.move(Math.floor(box.x + 4), Math.floor(box.y + 4))
+    }
+
+    await expect(
+      page.getByRole('heading', { name: 'Visualization Error' })
+    ).toHaveCount(0)
+  })
+
 })

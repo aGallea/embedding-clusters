@@ -48,6 +48,11 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
     umapNNeighbors, setUmapNNeighbors,
     umapMinDist, setUmapMinDist,
     umapMetric, setUmapMetric,
+    setImageField: setStoreImageField,
+    resetPlotJobId,
+    clearClusterDrillDown,
+    setPlotData,
+    resetVisibleClusters,
   } = usePlotStore()
 
   // 1. Fetch collection list
@@ -77,8 +82,18 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
     }
   }, [collectionDetails])
 
+  // Sync local imageField to store for drawer access
+  useEffect(() => {
+    setStoreImageField(imageField || null)
+  }, [imageField, setStoreImageField])
+
   const handleCompute = () => {
     if (!selectedCollection) return
+
+    resetPlotJobId()
+    clearClusterDrillDown()
+    setPlotData(null)
+    resetVisibleClusters(0)
 
     const request: PlotRequest = {
       chromadb_collection_name: selectedCollection,

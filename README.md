@@ -67,6 +67,44 @@ visualization in a few steps:
    focus on specific groups. Use the optional GPT-powered naming
    to label each cluster automatically.
 
+## Cluster Drill-Down and Annotation
+
+After generating a plot you can inspect, subdivide, and annotate
+individual clusters directly from the web UI.
+
+### Cluster Detail Panel
+
+Click a cluster name in the legend to open a side panel listing every
+item in that cluster. Items are sorted by distance to the centroid so
+the most representative points appear first. The panel supports
+pagination, displays item metadata, and shows image thumbnails when
+an image field is available.
+
+### Sub-Clustering
+
+Inside the detail panel, toggle **Sub-cluster** to re-run k-means
+within a single cluster. The result is rendered as a mini 3D scatter
+plot (PCA-reduced) so you can explore hierarchical structure without
+leaving the page.
+
+### Annotations
+
+Each cluster can be renamed, tagged, and annotated with free-form
+notes. Changes are saved automatically (debounced) and persisted as
+JSON sidecar files in the `annotations/` directory. Annotations
+survive page reloads and are scoped per plot job.
+
+### API Endpoints
+
+The feature exposes the following REST endpoints under `/api`:
+
+- `GET /plot/{job_id}/cluster/{index}` -- paginated cluster detail
+- `POST /plot/{job_id}/cluster/{index}/sub-cluster` -- sub-cluster
+  a single cluster with configurable k
+- `GET /annotations/{job_id}` -- fetch all annotations for a job
+- `PUT /annotations/{job_id}` -- update annotations
+- `DELETE /annotations/{job_id}` -- delete annotations
+
 ```text
 CSV --> Select Fields --> Download Model --> Embed & Store
   --> Configure Plot --> 3D Visualization --> Search & Explore

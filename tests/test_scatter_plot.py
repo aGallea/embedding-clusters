@@ -603,3 +603,81 @@ class TestComputePlotData:
             "imageUrl": "url1",
             "category": "a",
         }
+
+
+class TestComputePlotDataInternalFields:
+    """Tests for internal fields added by compute_plot_data."""
+
+    def _make_settings(self) -> Settings:
+        return Settings(
+            running_mode="PLOT",
+            chromadb_collection_name="test_collection",
+            num_clusters=2,
+            reduction_algorithm="pca",
+            text_display_fields=["name"],
+            image_field="imageUrl",
+        )
+
+    def _run_compute(self, settings: Settings, n_points: int = 4) -> dict[str, object]:
+        from embedding_cluster.scatter_plot import compute_plot_data
+
+        rng = np.random.default_rng(42)
+        embeddings = rng.random((n_points, 5)).tolist()
+        ids = [str(i) for i in range(n_points)]
+        metadatas = [{"name": f"item{i}", "imageUrl": f"url{i}"} for i in range(n_points)]
+        collection_content = {
+            "ids": ids,
+            "embeddings": embeddings,
+            "metadatas": metadatas,
+        }
+        labels = np.array([i % 2 for i in range(n_points)])
+
+        with (
+            patch(
+                "embedding_cluster.scatter_plot.load_chromadb_collection",
+                return_value=collection_content,
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.reduce_dimensions",
+                return_value=np.zeros((n_points, 3)),
+            ),
+            patch(
+                "embedding_cluster.scatter_plot.KMeans",
+            ) as mock_kmeans_cls,
+        ):
+            mock_kmeans = MagicMock()
+            mock_kmeans.fit_predict.return_value = labels
+            mock_kmeans.cluster_centers_ = rng.random((2, 5))
+            mock_kmeans_cls.return_value = mock_kmeans
+            return compute_plot_data(settings)
+
+    def test_embeddings_standardized_present(self) -> None:
+        result = self._run_compute(self._make_settings())
+        assert "embeddings_standardized" in result
+
+    def test_embeddings_standardized_is_list_of_lists(self) -> None:
+        result = self._run_compute(self._make_settings(), n_points=4)
+        emb = result["embeddings_standardized"]
+        assert isinstance(emb, list)
+        assert len(emb) == 4
+        assert isinstance(emb[0], list)
+
+    def test_cluster_labels_present(self) -> None:
+        result = self._run_compute(self._make_settings())
+        assert "cluster_labels" in result
+
+    def test_cluster_labels_length_matches_points(self) -> None:
+        result = self._run_compute(self._make_settings(), n_points=4)
+        labels = result["cluster_labels"]
+        assert isinstance(labels, list)
+        assert len(labels) == 4
+
+    def test_point_ids_present(self) -> None:
+        result = self._run_compute(self._make_settings())
+        assert "point_ids" in result
+
+    def test_point_ids_match_collection_ids(self) -> None:
+        result = self._run_compute(self._make_settings(), n_points=4)
+        point_ids = result["point_ids"]
+        assert isinstance(point_ids, list)
+        assert sorted(point_ids) == ["0", "1", "2", "3"]
