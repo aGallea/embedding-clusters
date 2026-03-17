@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePlotStore, CLUSTER_COLORS } from '../../stores/plotStore'
-import { getClusterDetail, updateAnnotation, getAnnotations } from '../../api/plot'
-import type { ClusterDetailResponse } from '../../types'
+import { getClusterDetail, updateAnnotation, getAnnotations, suggestK } from '../../api/plot'
+import type { ClusterDetailResponse, SuggestKResponse } from '../../types'
 import SubClusterView from './SubClusterView'
 import SelectedPointsDistancePanel from './SelectedPointsDistancePanel'
 
@@ -31,6 +31,8 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const [notes, setNotes] = useState('')
   const [tagsInput, setTagsInput] = useState('')
   const [showSubCluster, setShowSubCluster] = useState(false)
+  const [suggestedK, setSuggestedK] = useState<SuggestKResponse | null>(null)
+  const [isLoadingSuggestK, setIsLoadingSuggestK] = useState(false)
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const tagsTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -44,6 +46,8 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     if (clusterIndex == null) return
     setPage(1)
     setShowSubCluster(false)
+    setSuggestedK(null)
+    setIsLoadingSuggestK(false)
     setIsLoadingClusterDetail(true)
     setClusterDetail(null)
 
@@ -134,6 +138,23 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     setHighlightedIds(pageIds)
   }, [clusterDetail, setHighlightedIds, setSelectedPointIds])
 
+  const handleSuggestK = useCallback(async () => {
+    if (clusterIndex == null || !jobId) return
+    setIsLoadingSuggestK(true)
+    setSuggestedK(null)
+    try {
+      const result = await suggestK(jobId, {
+        cluster_index: clusterIndex,
+        max_k: 10,
+      })
+      setSuggestedK(result)
+    } catch {
+      setSuggestedK(null)
+    } finally {
+      setIsLoadingSuggestK(false)
+    }
+  }, [jobId, clusterIndex])
+
   if (clusterIndex == null) return null
 
   const totalPages = clusterDetail ? Math.ceil(clusterDetail.total_items / clusterDetail.page_size) : 0
@@ -213,6 +234,18 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
         >
           Select page
         </button>
+        <button
+          onClick={handleSuggestK}
+          disabled={isLoadingSuggestK}
+          className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {isLoadingSuggestK ? 'Analyzing...' : 'Suggest k'}
+        </button>
+        {suggestedK && (
+          <span className="text-xs text-green-700 font-medium">
+            Suggested: k={suggestedK.suggested_k}
+          </span>
+        )}
       </div>
 
       {/* Sub-cluster view */}
