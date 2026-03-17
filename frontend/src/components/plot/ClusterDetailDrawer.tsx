@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePlotStore, CLUSTER_COLORS } from '../../stores/plotStore'
-import { getClusterDetail, updateAnnotation, getAnnotations, suggestK } from '../../api/plot'
+import {
+  getClusterDetail,
+  updateAnnotation,
+  getAnnotations,
+  suggestK,
+  subCluster,
+  subClusterByPointIds,
+} from '../../api/plot'
 import type { ClusterDetailResponse, SuggestKResponse } from '../../types'
-import SubClusterView from './SubClusterView'
 import SelectedPointsDistancePanel from './SelectedPointsDistancePanel'
 
 interface ClusterDetailDrawerProps {
@@ -24,13 +30,18 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const clearSelectedPointIds = usePlotStore((s) => s.clearSelectedPointIds)
   const setSelectedPointIds = usePlotStore((s) => s.setSelectedPointIds)
   const clearClusterDrillDown = usePlotStore((s) => s.clearClusterDrillDown)
+  const drillPath = usePlotStore((s) => s.drillPath)
+  const drillIntoCluster = usePlotStore((s) => s.drillIntoCluster)
+  const drillIntoSubCluster = usePlotStore((s) => s.drillIntoSubCluster)
+  const setIsLoadingDrill = usePlotStore((s) => s.setIsLoadingDrill)
+  const isLoadingDrill = usePlotStore((s) => s.isLoadingDrill)
 
   const [page, setPage] = useState(1)
   const [isEditingName, setIsEditingName] = useState(false)
   const [editName, setEditName] = useState('')
   const [notes, setNotes] = useState('')
   const [tagsInput, setTagsInput] = useState('')
-  const [showSubCluster, setShowSubCluster] = useState(false)
+  const [subClusterK, setSubClusterK] = useState(4)
   const [suggestedK, setSuggestedK] = useState<SuggestKResponse | null>(null)
   const [isLoadingSuggestK, setIsLoadingSuggestK] = useState(false)
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -41,11 +52,14 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const color = clusterIndex != null ? CLUSTER_COLORS[clusterIndex % CLUSTER_COLORS.length] : '#999'
   const annotation = clusterIndex != null ? annotations?.clusters[String(clusterIndex)] : undefined
 
+  const isDrilled = drillPath.length > 0
+  const currentLevel = isDrilled ? drillPath[drillPath.length - 1] : null
+  const subClusters = currentLevel?.subClusterData.sub_clusters
+
   // Load cluster detail when selected cluster changes
   useEffect(() => {
     if (clusterIndex == null) return
     setPage(1)
-    setShowSubCluster(false)
     setSuggestedK(null)
     setIsLoadingSuggestK(false)
     setIsLoadingClusterDetail(true)
@@ -69,6 +83,12 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     setNotes(annotation?.notes ?? '')
     setTagsInput(annotation?.tags?.join(', ') ?? '')
   }, [annotation])
+
+  // Reset sub-cluster k and suggested k when cluster changes
+  useEffect(() => {
+    setSubClusterK(4)
+    setSuggestedK(null)
+  }, [clusterIndex])
 
   const handlePageChange = useCallback((newPage: number) => {
     if (clusterIndex == null) return
@@ -143,17 +163,75 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     setIsLoadingSuggestK(true)
     setSuggestedK(null)
     try {
-      const result = await suggestK(jobId, {
-        cluster_index: clusterIndex,
-        max_k: 10,
-      })
-      setSuggestedK(result)
+      if (isDrilled && currentLevel) {
+        // When drilled, use point_ids for suggest-k on sub-cluster
+        const result = await suggestK(jobId, {
+          point_ids: currentLevel.pointIds,
+          max_k: 10,
+        })
+        setSuggestedK(result)
+        setSubClusterK(result.suggested_k)
+      } else {
+        const result = await suggestK(jobId, {
+          cluster_index: clusterIndex,
+          max_k: 10,
+        })
+        setSuggestedK(result)
+        setSubClusterK(result.suggested_k)
+      }
     } catch {
       setSuggestedK(null)
     } finally {
       setIsLoadingSuggestK(false)
     }
-  }, [jobId, clusterIndex])
+  }, [jobId, clusterIndex, isDrilled, currentLevel])
+
+  const handleComputeSubClusters = useCallback(async () => {
+    if (clusterIndex == null || !jobId || isLoadingDrill) return
+    setIsLoadingDrill(true)
+    try {
+      if (isDrilled && currentLevel) {
+        // Recursive drill: use point_ids from current sub-cluster selection
+        // We need the sub-cluster index the user clicked "drill" on — but
+        // for the initial compute from the section, drill the whole current level
+        const data = await subClusterByPointIds(jobId, {
+          num_sub_clusters: subClusterK,
+          point_ids: currentLevel.pointIds,
+        })
+        // This replaces the current level's sub-clusters with a deeper drill
+        drillIntoSubCluster(0, data)
+      } else {
+        const data = await subCluster(jobId, clusterIndex, {
+          num_sub_clusters: subClusterK,
+        })
+        drillIntoCluster(clusterIndex, data)
+      }
+    } catch {
+      setIsLoadingDrill(false)
+    }
+  }, [jobId, clusterIndex, subClusterK, isLoadingDrill, isDrilled, currentLevel, setIsLoadingDrill, drillIntoCluster, drillIntoSubCluster])
+
+  const handleDrillSubCluster = useCallback(async (subClusterIndex: number) => {
+    if (!jobId || isLoadingDrill) return
+    if (!currentLevel) return
+
+    const pointIds = currentLevel.subClusterData.points
+      .filter((p) => p.sub_cluster === subClusterIndex)
+      .map((p) => p.id)
+
+    if (pointIds.length < 4) return
+
+    setIsLoadingDrill(true)
+    try {
+      const data = await subClusterByPointIds(jobId, {
+        num_sub_clusters: subClusterK,
+        point_ids: pointIds,
+      })
+      drillIntoSubCluster(subClusterIndex, data)
+    } catch {
+      setIsLoadingDrill(false)
+    }
+  }, [jobId, isLoadingDrill, currentLevel, subClusterK, setIsLoadingDrill, drillIntoSubCluster])
 
   if (clusterIndex == null) return null
 
@@ -210,18 +288,8 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
         </button>
       </div>
 
-      {/* Sub-cluster toggle */}
+      {/* Action buttons */}
       <div className="px-4 py-2 border-b border-gray-200 flex items-center space-x-2 shrink-0">
-        <button
-          onClick={() => setShowSubCluster(!showSubCluster)}
-          className={`text-xs px-3 py-1 rounded border transition-colors ${
-            showSubCluster
-              ? 'bg-blue-50 border-blue-300 text-blue-700'
-              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          Sub-Cluster
-        </button>
         <button
           onClick={handleClearSelected}
           className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
@@ -234,24 +302,95 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
         >
           Select page
         </button>
-        <button
-          onClick={handleSuggestK}
-          disabled={isLoadingSuggestK}
-          className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-        >
-          {isLoadingSuggestK ? 'Analyzing...' : 'Suggest k'}
-        </button>
-        {suggestedK && (
-          <span className="text-xs text-green-700 font-medium">
-            Suggested: k={suggestedK.suggested_k}
-          </span>
-        )}
       </div>
 
-      {/* Sub-cluster view */}
-      {showSubCluster && (
-        <div className="border-b border-gray-200 shrink-0">
-          <SubClusterView jobId={jobId} clusterIndex={clusterIndex} />
+      {/* Sub-clustering section */}
+      <div className="px-4 py-3 border-b border-gray-200 shrink-0 space-y-2" data-testid="sub-cluster-section">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-gray-600">
+            Sub-clusters: {subClusterK}
+          </label>
+          {isLoadingDrill && (
+            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
+          )}
+        </div>
+        <input
+          type="range"
+          min="2"
+          max="20"
+          value={subClusterK}
+          onChange={(e) => setSubClusterK(Number(e.target.value))}
+          className="w-full"
+          data-testid="sub-cluster-k-slider"
+        />
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleSuggestK}
+            disabled={isLoadingSuggestK}
+            className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            data-testid="sub-cluster-suggest-k"
+          >
+            {isLoadingSuggestK ? 'Analyzing...' : 'Suggest k'}
+          </button>
+          {suggestedK && (
+            <span className="text-xs text-green-700 font-medium">
+              k={suggestedK.suggested_k}
+            </span>
+          )}
+          <button
+            onClick={handleComputeSubClusters}
+            disabled={isLoadingDrill}
+            className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors ml-auto"
+            data-testid="sub-cluster-compute"
+          >
+            {isLoadingDrill ? 'Computing...' : 'Compute Sub-clusters'}
+          </button>
+        </div>
+      </div>
+
+      {/* Sub-cluster list when drilled */}
+      {isDrilled && subClusters && (
+        <div className="px-4 py-2 border-b border-gray-200 shrink-0" data-testid="drawer-subcluster-list">
+          <div className="text-xs font-medium text-gray-500 mb-1.5">Current sub-clusters</div>
+          <div className="space-y-1">
+            {subClusters.map((sc) => {
+              const scColor = CLUSTER_COLORS[sc.index % CLUSTER_COLORS.length]
+              const canDrill = sc.count >= 4
+              return (
+                <div
+                  key={sc.index}
+                  className="flex items-center justify-between py-1 px-2 rounded bg-gray-50 border border-gray-200"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: scColor }}
+                    />
+                    <span className="text-xs text-gray-900 font-medium">
+                      Sub {sc.index}
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      {sc.count} pts
+                    </span>
+                  </div>
+                  {canDrill && (
+                    <button
+                      data-testid={`drawer-subcluster-drill-${sc.index}`}
+                      onClick={() => handleDrillSubCluster(sc.index)}
+                      disabled={isLoadingDrill}
+                      className="p-0.5 rounded hover:bg-blue-100 transition-colors text-gray-400 hover:text-blue-600 disabled:opacity-50"
+                      title="Drill deeper into this sub-cluster"
+                      aria-label={`Drill into Sub ${sc.index}`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

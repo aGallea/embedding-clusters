@@ -387,7 +387,7 @@ test.describe('Cluster detail drawer', () => {
     await expect(page.getByTestId('selected-distance-row').first()).toContainText(/vs/i)
   })
 
-  test('drill button triggers drill-down into sub-clusters', async ({ page, plotPage: _ }) => {
+  test('drawer compute triggers drill-down into sub-clusters', async ({ page, plotPage: _ }) => {
     await expect(
       page.getByRole('button', { name: 'Compute Plot' })
     ).toBeVisible({ timeout: 10_000 })
@@ -395,9 +395,12 @@ test.describe('Cluster detail drawer', () => {
     await page.getByRole('button', { name: 'Compute Plot' }).click()
     await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
 
-    const drillButton = page.getByTestId('cluster-drill-0')
-    await expect(drillButton).toBeVisible({ timeout: 10_000 })
-    await drillButton.click()
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
 
     const breadcrumb = page.getByTestId('drill-breadcrumb')
     await expect(breadcrumb).toBeVisible({ timeout: 15_000 })
@@ -417,9 +420,12 @@ test.describe('Cluster detail drawer', () => {
     await page.getByRole('button', { name: 'Compute Plot' }).click()
     await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
 
-    const drillButton = page.getByTestId('cluster-drill-0')
-    await expect(drillButton).toBeVisible({ timeout: 10_000 })
-    await drillButton.click()
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
 
     const breadcrumb = page.getByTestId('drill-breadcrumb')
     await expect(breadcrumb).toBeVisible({ timeout: 15_000 })
@@ -440,9 +446,12 @@ test.describe('Cluster detail drawer', () => {
     await page.getByRole('button', { name: 'Compute Plot' }).click()
     await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
 
-    const drillButton = page.getByTestId('cluster-drill-0')
-    await expect(drillButton).toBeVisible({ timeout: 10_000 })
-    await drillButton.click()
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
 
     const breadcrumb = page.getByTestId('drill-breadcrumb')
     await expect(breadcrumb).toBeVisible({ timeout: 15_000 })

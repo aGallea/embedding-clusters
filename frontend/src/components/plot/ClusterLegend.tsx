@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import { usePlotStore, CLUSTER_COLORS } from '../../stores/plotStore'
-import { subCluster, subClusterByPointIds } from '../../api/plot'
 
 export default function ClusterLegend() {
   const plotData = usePlotStore((state) => state.plotData)
@@ -11,28 +10,8 @@ export default function ClusterLegend() {
   const setSelectedCluster = usePlotStore((state) => state.setSelectedCluster)
   const selectedCluster = usePlotStore((state) => state.selectedCluster)
   const annotations = usePlotStore((state) => state.annotations)
-  const plotJobId = usePlotStore((state) => state.plotJobId)
   const drillPath = usePlotStore((state) => state.drillPath)
-  const drillIntoCluster = usePlotStore((state) => state.drillIntoCluster)
-  const drillIntoSubCluster = usePlotStore((state) => state.drillIntoSubCluster)
-  const setIsLoadingDrill = usePlotStore((state) => state.setIsLoadingDrill)
   const isLoadingDrill = usePlotStore((state) => state.isLoadingDrill)
-
-  const handleDrillCluster = useCallback(
-    async (clusterIndex: number) => {
-      if (!plotJobId || isLoadingDrill) return
-      setIsLoadingDrill(true)
-      try {
-        const data = await subCluster(plotJobId, clusterIndex, {
-          num_sub_clusters: 4,
-        })
-        drillIntoCluster(clusterIndex, data)
-      } catch {
-        setIsLoadingDrill(false)
-      }
-    },
-    [plotJobId, isLoadingDrill, setIsLoadingDrill, drillIntoCluster],
-  )
 
   const handleClickCluster = useCallback(
     (clusterIndex: number, isSelected: boolean) => {
@@ -41,37 +20,10 @@ export default function ClusterLegend() {
     [setSelectedCluster],
   )
 
-  const handleDrillSubCluster = useCallback(
-    async (subClusterIndex: number) => {
-      if (!plotJobId || isLoadingDrill) return
-      const currentLevel = drillPath[drillPath.length - 1]
-      if (!currentLevel) return
-
-      const pointIds = currentLevel.subClusterData.points
-        .filter((p) => p.sub_cluster === subClusterIndex)
-        .map((p) => p.id)
-
-      if (pointIds.length < 4) return // Not enough points to sub-cluster
-
-      setIsLoadingDrill(true)
-      try {
-        const data = await subClusterByPointIds(plotJobId, {
-          num_sub_clusters: 4,
-          point_ids: pointIds,
-        })
-        drillIntoSubCluster(subClusterIndex, data)
-      } catch {
-        setIsLoadingDrill(false)
-      }
-    },
-    [plotJobId, isLoadingDrill, drillPath, setIsLoadingDrill, drillIntoSubCluster],
-  )
-
   if (!plotData) return null
 
   const handleShowAll = () => resetVisibleClusters(plotData.clusters.length)
 
-  // When drilled in, show sub-cluster entries
   const isDrilled = drillPath.length > 0
   const currentLevel = isDrilled ? drillPath[drillPath.length - 1] : null
   const subClusters = currentLevel?.subClusterData.sub_clusters
@@ -102,7 +54,6 @@ export default function ClusterLegend() {
         {isDrilled && subClusters
           ? subClusters.map((sc) => {
               const color = CLUSTER_COLORS[sc.index % CLUSTER_COLORS.length]
-              const canDrill = sc.count >= 4
               return (
                 <div
                   key={sc.index}
@@ -125,19 +76,6 @@ export default function ClusterLegend() {
                       </div>
                     </div>
                   </span>
-                  {canDrill && (
-                    <button
-                      data-testid={`subcluster-drill-${sc.index}`}
-                      onClick={() => handleDrillSubCluster(sc.index)}
-                      className="p-0.5 rounded hover:bg-blue-100 transition-colors shrink-0 text-gray-400 hover:text-blue-600"
-                      title="Drill into sub-cluster"
-                      aria-label={`Drill into Sub ${sc.index}`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  )}
                 </div>
               )
             })
@@ -210,17 +148,6 @@ export default function ClusterLegend() {
                         title="Has annotations"
                       />
                     )}
-                  </button>
-                  <button
-                    data-testid={`cluster-drill-${cluster.index}`}
-                    onClick={() => handleDrillCluster(cluster.index)}
-                    className="p-0.5 rounded hover:bg-blue-100 transition-colors shrink-0 text-gray-400 hover:text-blue-600"
-                    title="Drill into sub-clusters"
-                    aria-label={`Drill into ${annotation?.name || cluster.name}`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
                   </button>
                 </div>
               )
