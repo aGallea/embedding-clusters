@@ -11,6 +11,8 @@ import {
 import type { ClusterDetailResponse, SuggestKResponse } from '../../types'
 import SelectedPointsDistancePanel from './SelectedPointsDistancePanel'
 
+const SUB_CLUSTER_PREVIEW_LIMIT = 10
+
 interface ClusterDetailDrawerProps {
   jobId: string
   imageField?: string
@@ -44,6 +46,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const [subClusterK, setSubClusterK] = useState(4)
   const [suggestedK, setSuggestedK] = useState<SuggestKResponse | null>(null)
   const [isLoadingSuggestK, setIsLoadingSuggestK] = useState(false)
+  const [expandedSubClusterIndex, setExpandedSubClusterIndex] = useState<number | null>(null)
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const tagsTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -88,6 +91,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   useEffect(() => {
     setSubClusterK(4)
     setSuggestedK(null)
+    setExpandedSubClusterIndex(null)
   }, [clusterIndex])
 
   const handlePageChange = useCallback((newPage: number) => {
@@ -190,6 +194,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     if (clusterIndex == null || !jobId || isLoadingDrill) return
     setIsLoadingDrill(true)
     try {
+      setExpandedSubClusterIndex(null)
       if (isDrilled && currentLevel) {
         // Recursive drill: use point_ids from current sub-cluster selection
         // We need the sub-cluster index the user clicked "drill" on — but
@@ -223,6 +228,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
 
     setIsLoadingDrill(true)
     try {
+      setExpandedSubClusterIndex(null)
       const data = await subClusterByPointIds(jobId, {
         num_sub_clusters: subClusterK,
         point_ids: pointIds,
@@ -232,6 +238,12 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
       setIsLoadingDrill(false)
     }
   }, [jobId, isLoadingDrill, currentLevel, subClusterK, setIsLoadingDrill, drillIntoSubCluster])
+
+  const handleToggleSubClusterExpanded = useCallback((subClusterIndex: number) => {
+    setExpandedSubClusterIndex((currentIndex) =>
+      currentIndex === subClusterIndex ? null : subClusterIndex,
+    )
+  }, [])
 
   if (clusterIndex == null) return null
 
@@ -356,36 +368,92 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
             {subClusters.map((sc) => {
               const scColor = CLUSTER_COLORS[sc.index % CLUSTER_COLORS.length]
               const canDrill = sc.count >= 4
+              const isExpanded = expandedSubClusterIndex === sc.index
+              const previewItems = currentLevel?.subClusterData.points
+                .filter((point) => point.sub_cluster === sc.index)
+                .slice(0, SUB_CLUSTER_PREVIEW_LIMIT) ?? []
               return (
                 <div
                   key={sc.index}
-                  className="flex items-center justify-between py-1 px-2 rounded bg-gray-50 border border-gray-200"
+                  className="rounded bg-gray-50 border border-gray-200 overflow-hidden"
                 >
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: scColor }}
-                    />
-                    <span className="text-xs text-gray-900 font-medium">
-                      Sub {sc.index}
-                    </span>
-                    <span className="text-[10px] text-gray-500">
-                      {sc.count} pts
-                    </span>
-                  </div>
-                  {canDrill && (
+                  <div className="flex items-center justify-between py-1 px-2">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: scColor }}
+                      />
+                      <span className="text-xs text-gray-900 font-medium">
+                        Sub {sc.index}
+                      </span>
+                      <span className="text-[10px] text-gray-500 shrink-0">
+                        {sc.count} pts
+                      </span>
+                    </div>
                     <button
-                      data-testid={`drawer-subcluster-drill-${sc.index}`}
-                      onClick={() => handleDrillSubCluster(sc.index)}
-                      disabled={isLoadingDrill}
-                      className="p-0.5 rounded hover:bg-blue-100 transition-colors text-gray-400 hover:text-blue-600 disabled:opacity-50"
-                      title="Drill deeper into this sub-cluster"
-                      aria-label={`Drill into Sub ${sc.index}`}
+                      data-testid={`drawer-subcluster-toggle-${sc.index}`}
+                      onClick={() => handleToggleSubClusterExpanded(sc.index)}
+                      className="p-0.5 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
+                      title={isExpanded ? 'Collapse sub-cluster preview' : 'Expand sub-cluster preview'}
+                      aria-label={isExpanded ? `Collapse Sub ${sc.index}` : `Expand Sub ${sc.index}`}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isExpanded ? 'rotate-180 transition-transform' : 'transition-transform'}>
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
+                  </div>
+                  {isExpanded && (
+                    <div
+                      className="border-t border-gray-200 px-2 py-2 space-y-2 bg-white"
+                      data-testid={`drawer-subcluster-panel-${sc.index}`}
+                    >
+                      <div
+                        className="space-y-1"
+                        data-testid={`drawer-subcluster-preview-${sc.index}`}
+                      >
+                        {previewItems.length > 0 ? (
+                          previewItems.map((item) => {
+                            const title =
+                              Object.values(item.metadata).find(
+                                (value) => typeof value === 'string' && value.trim().length > 0,
+                              ) ?? item.id
+
+                            return (
+                              <div
+                                key={item.id}
+                                className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5"
+                              >
+                                <div className="text-[11px] font-medium text-gray-900 truncate">
+                                  {String(title)}
+                                </div>
+                                <div className="text-[10px] text-gray-500 truncate">
+                                  {item.id}
+                                </div>
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div className="text-[10px] text-gray-500">
+                            Preview not available for this sub-cluster yet.
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] text-gray-500">
+                          Showing up to {SUB_CLUSTER_PREVIEW_LIMIT} products
+                        </div>
+                        {canDrill && (
+                          <button
+                            data-testid={`drawer-subcluster-drill-deeper-${sc.index}`}
+                            onClick={() => handleDrillSubCluster(sc.index)}
+                            disabled={isLoadingDrill}
+                            className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          >
+                            {isLoadingDrill ? 'Drilling...' : 'Drill deeper'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )
