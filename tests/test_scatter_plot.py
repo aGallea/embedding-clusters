@@ -681,3 +681,32 @@ class TestComputePlotDataInternalFields:
         point_ids = result["point_ids"]
         assert isinstance(point_ids, list)
         assert sorted(point_ids) == ["0", "1", "2", "3"]
+
+    def test_points_aligned_with_cluster_labels(self) -> None:
+        """points[i].cluster must equal cluster_labels[i] for every i.
+
+        Regression: compute_plot_data previously grouped points by cluster
+        instead of preserving original-data order, causing the cluster-detail
+        endpoint to return items from the wrong cluster.
+        """
+        result = self._run_compute(self._make_settings(), n_points=6)
+        points = result["points"]
+        labels = result["cluster_labels"]
+        assert len(points) == len(labels)
+        for i, (point, label) in enumerate(zip(points, labels, strict=True)):
+            assert point["cluster"] == label, (
+                f"points[{i}].cluster={point['cluster']} != cluster_labels[{i}]={label}"
+            )
+
+    def test_points_preserve_original_id_order(self) -> None:
+        """points[i].id must equal the i-th collection id.
+
+        Regression: when points were grouped by cluster the id ordering
+        no longer matched the original collection order, breaking the
+        index-based lookup in cluster-detail and sub-cluster endpoints.
+        """
+        result = self._run_compute(self._make_settings(), n_points=6)
+        points = result["points"]
+        expected_ids = [str(i) for i in range(6)]
+        actual_ids = [p["id"] for p in points]
+        assert actual_ids == expected_ids

@@ -292,6 +292,9 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
     )
 
     # Build structured point data
+    # Points are built in original data order so that points[i] aligns
+    # with cluster_labels[i] and embeddings_standardized[i].  The
+    # cluster-detail and sub-cluster endpoints rely on this alignment.
     points: list[dict[str, Any]] = []
     clusters: list[dict[str, Any]] = []
 
@@ -308,33 +311,34 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
             }
         )
 
-        for idx in clusters_indices[cluster_i]:
-            metadata: dict[str, Any] = {}
-            if idx < len(collection_content["metadatas"]):
-                raw_metadata = dict(collection_content["metadatas"][idx])
-                if display_fields:
-                    metadata = {
-                        key: value
-                        for key, value in raw_metadata.items()
-                        if key in display_fields
-                    }
-                else:
-                    metadata = raw_metadata
-            point_id = (
-                collection_content["ids"][idx]
-                if idx < len(collection_content["ids"])
-                else str(idx)
-            )
-            points.append(
-                {
-                    "x": float(reduced[idx, 0]),
-                    "y": float(reduced[idx, 1]),
-                    "z": float(reduced[idx, 2]),
-                    "cluster": cluster_i,
-                    "metadata": metadata,
-                    "id": point_id,
+    for idx in range(len(collection_content["ids"])):
+        cluster_i = int(pred_arr[idx])
+        metadata: dict[str, Any] = {}
+        if idx < len(collection_content["metadatas"]):
+            raw_metadata = dict(collection_content["metadatas"][idx])
+            if display_fields:
+                metadata = {
+                    key: value
+                    for key, value in raw_metadata.items()
+                    if key in display_fields
                 }
-            )
+            else:
+                metadata = raw_metadata
+        point_id = (
+            collection_content["ids"][idx]
+            if idx < len(collection_content["ids"])
+            else str(idx)
+        )
+        points.append(
+            {
+                "x": float(reduced[idx, 0]),
+                "y": float(reduced[idx, 1]),
+                "z": float(reduced[idx, 2]),
+                "cluster": cluster_i,
+                "metadata": metadata,
+                "id": point_id,
+            }
+        )
 
     return {
         "points": points,
