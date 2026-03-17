@@ -11,6 +11,8 @@ export default function ParticleCloud() {
   const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const selectedPointIds = usePlotStore((state) => state.selectedPointIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
+  const subClusterColorMap = usePlotStore((state) => state.subClusterColorMap)
+  const drillPath = usePlotStore((state) => state.drillPath)
 
   // Memoize positions, colors, and the mapping back to original point IDs
   const { positions, colors, filteredPointIds, selectedPositions, selectedColors } = useMemo(() => {
@@ -47,8 +49,21 @@ export default function ParticleCloud() {
       pos[i * 3 + 2] = p.z
 
       // Color
-      const color = colorObjects[p.cluster % colorObjects.length]
-      const dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      let dimFactor: number
+      let color: THREE.Color
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subIdx = subClusterColorMap.get(p.id)
+        if (subIdx !== undefined) {
+          color = colorObjects[subIdx % colorObjects.length]
+          dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+        } else {
+          color = colorObjects[p.cluster % colorObjects.length]
+          dimFactor = 0.15
+        }
+      } else {
+        color = colorObjects[p.cluster % colorObjects.length]
+        dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      }
       cols[i * 3] = color.r * dimFactor
       cols[i * 3 + 1] = color.g * dimFactor
       cols[i * 3 + 2] = color.b * dimFactor
@@ -75,7 +90,7 @@ export default function ParticleCloud() {
       selectedPositions: selectedPos,
       selectedColors: selectedCols,
     }
-  }, [plotData, visibleClusters, highlightedIds, selectedPointIds])
+  }, [plotData, visibleClusters, highlightedIds, selectedPointIds, subClusterColorMap, drillPath])
 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     // Stop event propagation so we don't trigger other things
