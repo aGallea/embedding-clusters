@@ -203,3 +203,101 @@ async def test_cluster_detail_job_not_ready(
         status.HTTP_409_CONFLICT,
         status.HTTP_200_OK,
     )
+
+
+def _fake_compute_interleaved_clusters(
+    _settings: object,
+) -> dict[str, object]:
+    """Fake compute with interleaved cluster labels.
+
+    Regression fixture: simulates real KMeans output where labels are NOT
+    grouped (e.g. [0, 1, 0, 1, 0, 1]).  The old code built points grouped
+    by cluster, so points[i] and cluster_labels[i] referred to different
+    items — causing the cluster-detail endpoint to return wrong products.
+    """
+    n = 6
+    rng = np.random.default_rng(99)
+    embeddings = rng.random((n, 4))
+    labels = [0, 1, 0, 1, 0, 1]
+
+    points = []
+    for i in range(n):
+        points.append(
+            {
+                "x": float(i),
+                "y": float(i),
+                "z": float(i),
+                "cluster": labels[i],
+                "metadata": {"name": f"item{i}"},
+                "id": str(i),
+            }
+        )
+
+    return {
+        "points": points,
+        "clusters": [
+            {
+                "index": 0,
+                "name": "Group 1",
+                "color": "hsl(0, 70%, 50%)",
+                "count": 3,
+            },
+            {
+                "index": 1,
+                "name": "Group 2",
+                "color": "hsl(180, 70%, 50%)",
+                "count": 3,
+            },
+        ],
+        "total_points": n,
+        "embeddings_standardized": embeddings.tolist(),
+        "cluster_labels": labels,
+        "point_ids": [str(i) for i in range(n)],
+    }
+
+
+@pytest.fixture
+def mock_compute_interleaved() -> Iterator[None]:
+    with patch(
+        "embedding_cluster.server.routes.plot.compute_plot_data",
+        side_effect=_fake_compute_interleaved_clusters,
+    ):
+        yield
+
+
+@pytest.mark.asyncio
+async def test_cluster_detail_returns_correct_items_with_interleaved_labels(
+    app: FastAPI, mock_compute_interleaved: None
+) -> None:
+    """Regression: cluster-detail must return items belonging to the
+    requested cluster when cluster_labels are interleaved (not grouped).
+    """
+    _ = mock_compute_interleaved
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start = await client.post(
+            "/api/plot/compute",
+            json={"chromadb_collection_name": "test"},
+        )
+        job_id = cast("str", start.json()["job_id"])
+        await asyncio.sleep(0.2)
+
+        resp_c0 = await client.get(f"/api/plot/{job_id}/cluster/0")
+        resp_c1 = await client.get(f"/api/plot/{job_id}/cluster/1")
+
+    assert resp_c0.status_code == status.HTTP_200_OK
+    assert resp_c1.status_code == status.HTTP_200_OK
+
+    c0_data = resp_c0.json()
+    c1_data = resp_c1.json()
+
+    c0_ids = {item["id"] for item in c0_data["items"]}
+    c1_ids = {item["id"] for item in c1_data["items"]}
+
+    assert c0_ids == {"0", "2", "4"}, (
+        f"Cluster 0 should contain items 0,2,4 but got {c0_ids}"
+    )
+    assert c1_ids == {"1", "3", "5"}, (
+        f"Cluster 1 should contain items 1,3,5 but got {c1_ids}"
+    )
