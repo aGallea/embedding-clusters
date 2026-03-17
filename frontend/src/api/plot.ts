@@ -12,6 +12,8 @@ import type {
   SubClusterResponse,
   SuggestClustersRequest,
   SuggestClustersStatusResponse,
+  SuggestKRequest,
+  SuggestKResponse,
 } from "../types";
 import { apiFetch, apiPost } from "./client";
 
@@ -67,6 +69,26 @@ export async function subCluster(
 ): Promise<SubClusterResponse> {
   return apiPost<SubClusterResponse>(
     `/plot/${jobId}/cluster/${clusterIndex}/sub-cluster`,
+    request,
+  );
+}
+
+export async function subClusterByPointIds(
+  jobId: string,
+  request: SubClusterRequest,
+): Promise<SubClusterResponse> {
+  return apiPost<SubClusterResponse>(
+    `/plot/${jobId}/sub-cluster`,
+    request,
+  );
+}
+
+export async function suggestK(
+  jobId: string,
+  request: SuggestKRequest,
+): Promise<SuggestKResponse> {
+  return apiPost<SuggestKResponse>(
+    `/plot/${jobId}/suggest-k`,
     request,
   );
 }

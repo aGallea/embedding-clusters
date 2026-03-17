@@ -168,6 +168,7 @@ export interface ClusterDetailResponse {
 // Sub-Cluster
 export interface SubClusterRequest {
   num_sub_clusters: number;
+  point_ids?: string[];
 }
 
 export interface SubClusterPoint {
@@ -190,6 +191,30 @@ export interface SubClusterResponse {
   points: SubClusterPoint[];
   sub_clusters: SubClusterInfo[];
   total_points: number;
+}
+
+// Drill-down
+export interface DrillLevel {
+  label: string;
+  pointIds: string[];
+  subClusterData: SubClusterResponse;
+}
+
+// Suggest K
+export interface SuggestKRequest {
+  point_ids?: string[];
+  cluster_index?: number;
+  max_k?: number;
+}
+
+export interface SuggestKScoreEntry {
+  k: number;
+  score: number;
+}
+
+export interface SuggestKResponse {
+  suggested_k: number;
+  scores: SuggestKScoreEntry[];
 }
 
 // Annotations
