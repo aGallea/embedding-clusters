@@ -81,6 +81,7 @@ function FallbackSprite({ point, color, size }: { point: PlotPoint; color: strin
 export default function ImageSpriteCloud() {
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const visibleSubClusters = usePlotStore((state) => state.visibleSubClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
   const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const selectedPointIds = usePlotStore((state) => state.selectedPointIds)
@@ -90,8 +91,23 @@ export default function ImageSpriteCloud() {
 
   const visiblePoints = useMemo(() => {
     if (!plotData) return []
-    return plotData.points.filter((p) => visibleClusters.has(p.cluster))
-  }, [plotData, visibleClusters])
+    return plotData.points.filter((point) => {
+      if (!visibleClusters.has(point.cluster)) {
+        return false
+      }
+
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subClusterIndex = subClusterColorMap.get(point.id)
+        if (subClusterIndex === undefined) {
+          return false
+        }
+
+        return visibleSubClusters.has(subClusterIndex)
+      }
+
+      return true
+    })
+  }, [plotData, visibleClusters, visibleSubClusters, subClusterColorMap, drillPath])
 
   const spritesToRender = useMemo(() => {
     return visiblePoints.slice(0, MAX_SPRITES).map((point) => {

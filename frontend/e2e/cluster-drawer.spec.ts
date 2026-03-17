@@ -21,16 +21,140 @@ async function expandFirstDrillableSubCluster(page: Page) {
       timeout: 10_000,
     })
 
-    const drillButton = page.getByTestId(`drawer-subcluster-drill-deeper-${index}`)
-    if (await drillButton.count()) {
-      return { index, drillButton }
+    return { index }
+  }
+
+  throw new Error('No expandable sub-cluster found in drawer preview')
+}
+
+async function selectFirstDrillableSubCluster(page: Page) {
+  await expect(page.getByTestId('drawer-subcluster-list')).toBeVisible({ timeout: 10_000 })
+
+  const rows = page.locator('[data-testid^="drawer-subcluster-row-"]')
+  const rowCount = await rows.count()
+
+  for (let index = 0; index < rowCount; index += 1) {
+    const rowText = (await rows.nth(index).textContent()) ?? ''
+    const countMatch = rowText.match(/(\d+)\s*pts/)
+    const pointCount = countMatch ? Number(countMatch[1]) : 0
+
+    if (pointCount >= 4) {
+      await rows.nth(index).click()
+      return { index }
     }
   }
 
-  throw new Error('No drillable sub-cluster found in drawer preview')
+  throw new Error('No selectable drillable sub-cluster found')
 }
 
 test.describe('Cluster detail drawer', () => {
+  test('drilled legend eye icon hides and shows a sub-group', async ({ page, plotPage: _ }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    const drilledToggle = page.getByRole('button', { name: 'Hide Sub 0' })
+    await expect(drilledToggle).toBeVisible({ timeout: 10_000 })
+    await drilledToggle.click()
+
+    await expect(page.getByRole('button', { name: 'Show Sub 0' })).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(page.getByTestId('subcluster-legend-name-0')).toContainText(/Sub 0/i)
+
+    await page.getByRole('button', { name: 'Show Sub 0' }).click()
+
+    await expect(page.getByRole('button', { name: 'Hide Sub 0' })).toBeVisible({
+      timeout: 10_000,
+    })
+  })
+
+  test('drilled legend supports isolate and show all for sub-groups', async ({
+    page,
+    plotPage: _,
+  }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    const drilledToggle = page.getByRole('button', { name: 'Hide Sub 0' })
+    await expect(drilledToggle).toBeVisible({ timeout: 10_000 })
+    await drilledToggle.click({ modifiers: ['ControlOrMeta'] })
+
+    await expect(page.getByRole('button', { name: 'Hide Sub 1' })).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Show Sub 1' })).toBeVisible({
+      timeout: 10_000,
+    })
+
+    await page.getByRole('button', { name: 'Show All' }).click()
+
+    await expect(page.getByRole('button', { name: 'Hide Sub 0' })).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(page.getByRole('button', { name: 'Hide Sub 1' })).toBeVisible({
+      timeout: 10_000,
+    })
+  })
+
+  test('drilled sub-group visibility resets after navigating back', async ({
+    page,
+    plotPage: _,
+  }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    await page.getByRole('button', { name: 'Hide Sub 0' }).click()
+    await expect(page.getByRole('button', { name: 'Show Sub 0' })).toBeVisible({
+      timeout: 10_000,
+    })
+
+    await page.getByTestId('breadcrumb-back').click()
+    await expect(page.getByTestId('drill-breadcrumb')).toBeHidden({ timeout: 5_000 })
+
+    await computeBtn.click()
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: 'Hide Sub 0' })).toBeVisible({
+      timeout: 10_000,
+    })
+  })
+
   test('opens drawer when clicking cluster legend item', async ({ page, plotPage: _ }) => {
     await expect(
       page.getByRole('button', { name: 'Compute Plot' })
@@ -456,11 +580,39 @@ test.describe('Cluster detail drawer', () => {
 
     await expect(page.getByTestId('drawer-subcluster-panel-0')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('drawer-subcluster-preview-0')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('drawer-subcluster-preview-item-0').first()).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(page.getByTestId('drawer-subcluster-preview-meta-0').first()).toBeVisible({
+      timeout: 10_000,
+    })
 
     await expect(page.getByTestId('breadcrumb-root')).toBeVisible()
   })
 
-  test('drill deeper button triggers recursive drill', async ({ page, plotPage: _ }) => {
+  test('expanded sub-cluster panels do not show fixed preview-limit copy', async ({ page, plotPage: _ }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    await expandFirstDrillableSubCluster(page)
+
+    await expect(page.getByText('Showing up to 10 products')).toHaveCount(0)
+  })
+
+  test('compute is disabled until a drilled sub-cluster row is selected', async ({ page, plotPage: _ }) => {
     await expect(
       page.getByRole('button', { name: 'Compute Plot' })
     ).toBeVisible({ timeout: 10_000 })
@@ -477,12 +629,136 @@ test.describe('Cluster detail drawer', () => {
 
     const breadcrumb = page.getByTestId('drill-breadcrumb')
     await expect(breadcrumb).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('drawer-subcluster-list')).toBeVisible({ timeout: 10_000 })
 
-    const { drillButton: drillDeeperButton } = await expandFirstDrillableSubCluster(page)
-    await expect(drillDeeperButton).toBeVisible({ timeout: 10_000 })
-    await drillDeeperButton.click()
+    await expect(computeBtn).toBeDisabled()
+
+    const { index } = await selectFirstDrillableSubCluster(page)
+    await expect(page.getByTestId(`drawer-subcluster-row-${index}`)).toHaveAttribute(
+      'data-selected',
+      'true',
+    )
+    await expect(computeBtn).toBeEnabled()
+  })
+
+  test('selected sub-cluster row drives recursive compute', async ({ page, plotPage: _ }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    const breadcrumb = page.getByTestId('drill-breadcrumb')
+    await expect(breadcrumb).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('drawer-subcluster-list')).toBeVisible({ timeout: 10_000 })
+
+    await selectFirstDrillableSubCluster(page)
+    await expect(computeBtn).toBeEnabled()
+    await computeBtn.click()
 
     await expect(page.getByTestId('breadcrumb-level-1')).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('lower product list is hidden after sub-clusters are created', async ({ page, plotPage: _ }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('drawer-subcluster-list')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('cluster-detail-main-list')).toHaveCount(0)
+    await expect(page.getByText(/Page 1 \/ 2/i)).toHaveCount(0)
+  })
+
+  test('sub-cluster list scrolls when expanded preview is tall', async ({ page, plotPage: _ }) => {
+    await page.setViewportSize({ width: 980, height: 700 })
+
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    await expandFirstDrillableSubCluster(page)
+
+    const subClusterList = page.getByTestId('drawer-subcluster-list')
+    await expect(subClusterList).toBeVisible({ timeout: 10_000 })
+
+    const scrollMetrics = await subClusterList.evaluate((element) => {
+      const listElement = element as HTMLDivElement
+      listElement.scrollTop = 200
+
+      return {
+        scrollHeight: listElement.scrollHeight,
+        clientHeight: listElement.clientHeight,
+        scrollTop: listElement.scrollTop,
+      }
+    })
+
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight)
+    expect(scrollMetrics.scrollTop).toBeGreaterThan(0)
+  })
+
+  test('drilled-mode item cards toggle product selection and plot highlight', async ({
+    page,
+    plotPage: _,
+  }) => {
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    const { index } = await expandFirstDrillableSubCluster(page)
+    const firstItem = page.getByTestId(`drawer-subcluster-preview-item-${index}`).first()
+    await expect(firstItem).toBeVisible({ timeout: 10_000 })
+
+    await firstItem.click()
+    await expect(firstItem).toHaveAttribute('data-selected', 'true')
+
+    const selectedCount = await page.evaluate(() => {
+      const plotWindow = window as PlotStoreWindow
+      return plotWindow.__plotStore?.getState().selectedPointIds?.size ?? 0
+    })
+    expect(selectedCount).toBeGreaterThan(0)
   })
 
   test('breadcrumb back button returns to top level', async ({ page, plotPage: _ }) => {

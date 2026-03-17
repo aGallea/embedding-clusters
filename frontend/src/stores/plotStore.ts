@@ -4,6 +4,7 @@ import type { AnnotationsResponse, ClusterDetailResponse, DrillLevel, PlotRespon
 interface PlotState {
   plotData: PlotResponse | null
   visibleClusters: Set<number>
+  visibleSubClusters: Set<number>
   hoveredPointId: string | null
   renderMode: 'particles' | 'sprites' | 'spheres'
   pointSize: number
@@ -61,6 +62,9 @@ interface PlotState {
   resetDrill: () => void
   setIsLoadingDrill: (loading: boolean) => void
   isolateCluster: (index: number) => void
+  toggleSubCluster: (index: number) => void
+  isolateSubCluster: (index: number) => void
+  resetVisibleSubClusters: (indices: number[]) => void
   clearClusterDrillDown: () => void
   setImageField: (field: string | null) => void
   setPlotJobId: (jobId: string | null) => void
@@ -87,9 +91,14 @@ function buildColorMap(data: SubClusterResponse): Map<string, number> {
   return map
 }
 
+function buildVisibleSubClusterSet(data: SubClusterResponse): Set<number> {
+  return new Set(data.sub_clusters.map((subCluster) => subCluster.index))
+}
+
 export const usePlotStore = create<PlotState>((set) => ({
   plotData: null,
   visibleClusters: new Set(),
+  visibleSubClusters: new Set(),
   hoveredPointId: null,
   renderMode: 'particles',
   pointSize: 5,
@@ -176,6 +185,7 @@ export const usePlotStore = create<PlotState>((set) => ({
       return {
         drillPath: [level],
         subClusterColorMap: buildColorMap(subClusterData),
+        visibleSubClusters: buildVisibleSubClusterSet(subClusterData),
         isLoadingDrill: false,
       }
     }),
@@ -188,6 +198,7 @@ export const usePlotStore = create<PlotState>((set) => ({
       return {
         drillPath: [...state.drillPath, level],
         subClusterColorMap: buildColorMap(subClusterData),
+        visibleSubClusters: buildVisibleSubClusterSet(subClusterData),
         isLoadingDrill: false,
       }
     }),
@@ -204,6 +215,9 @@ export const usePlotStore = create<PlotState>((set) => ({
         subClusterColorMap: currentLevel
           ? buildColorMap(currentLevel.subClusterData)
           : null,
+        visibleSubClusters: currentLevel
+          ? buildVisibleSubClusterSet(currentLevel.subClusterData)
+          : new Set(),
       }
     }),
 
@@ -217,16 +231,41 @@ export const usePlotStore = create<PlotState>((set) => ({
         subClusterColorMap: currentLevel
           ? buildColorMap(currentLevel.subClusterData)
           : null,
+        visibleSubClusters: currentLevel
+          ? buildVisibleSubClusterSet(currentLevel.subClusterData)
+          : new Set(),
       }
     }),
 
   resetDrill: () =>
-    set({ drillPath: [], subClusterColorMap: null, isLoadingDrill: false }),
+    set({
+      drillPath: [],
+      subClusterColorMap: null,
+      visibleSubClusters: new Set(),
+      isLoadingDrill: false,
+    }),
 
   setIsLoadingDrill: (loading) => set({ isLoadingDrill: loading }),
 
   isolateCluster: (index) =>
     set(() => ({ visibleClusters: new Set([index]) })),
+
+  toggleSubCluster: (index) =>
+    set((state) => {
+      const newVisible = new Set(state.visibleSubClusters)
+      if (newVisible.has(index)) {
+        newVisible.delete(index)
+      } else {
+        newVisible.add(index)
+      }
+      return { visibleSubClusters: newVisible }
+    }),
+
+  isolateSubCluster: (index) =>
+    set(() => ({ visibleSubClusters: new Set([index]) })),
+
+  resetVisibleSubClusters: (indices) =>
+    set({ visibleSubClusters: new Set(indices) }),
 
   setImageField: (field) => set({ imageField: field }),
   setPlotJobId: (jobId) => set({ plotJobId: jobId }),
