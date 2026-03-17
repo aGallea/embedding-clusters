@@ -184,3 +184,147 @@ async def test_sub_cluster_validation_min(app: FastAPI) -> None:
         )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.asyncio
+async def test_sub_cluster_by_point_ids(
+    app: FastAPI, mock_compute_subcluster: None
+) -> None:
+    _ = mock_compute_subcluster
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start = await client.post(
+            "/api/plot/compute",
+            json={"chromadb_collection_name": "test"},
+        )
+        job_id = cast("str", start.json()["job_id"])
+        await asyncio.sleep(0.2)
+
+        point_ids = [str(i) for i in range(20)]
+        response = await client.post(
+            f"/api/plot/{job_id}/sub-cluster",
+            json={"num_sub_clusters": 3, "point_ids": point_ids},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["total_points"] == 20
+    assert len(data["sub_clusters"]) == 3
+    assert len(data["points"]) == 20
+    for point in data["points"]:
+        assert point["id"] in point_ids
+        assert 0 <= point["sub_cluster"] < 3
+
+
+@pytest.mark.asyncio
+async def test_sub_cluster_point_ids_invalid_ids(
+    app: FastAPI, mock_compute_subcluster: None
+) -> None:
+    _ = mock_compute_subcluster
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start = await client.post(
+            "/api/plot/compute",
+            json={"chromadb_collection_name": "test"},
+        )
+        job_id = cast("str", start.json()["job_id"])
+        await asyncio.sleep(0.2)
+
+        response = await client.post(
+            f"/api/plot/{job_id}/sub-cluster",
+            json={
+                "num_sub_clusters": 2,
+                "point_ids": [
+                    "nonexistent1",
+                    "nonexistent2",
+                    "nonexistent3",
+                ],
+            },
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.asyncio
+async def test_sub_cluster_point_ids_too_few(
+    app: FastAPI, mock_compute_subcluster: None
+) -> None:
+    _ = mock_compute_subcluster
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start = await client.post(
+            "/api/plot/compute",
+            json={"chromadb_collection_name": "test"},
+        )
+        job_id = cast("str", start.json()["job_id"])
+        await asyncio.sleep(0.2)
+
+        response = await client.post(
+            f"/api/plot/{job_id}/sub-cluster",
+            json={
+                "num_sub_clusters": 5,
+                "point_ids": ["0", "1"],
+            },
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.asyncio
+async def test_suggest_k_by_point_ids(
+    app: FastAPI, mock_compute_subcluster: None
+) -> None:
+    _ = mock_compute_subcluster
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start = await client.post(
+            "/api/plot/compute",
+            json={"chromadb_collection_name": "test"},
+        )
+        job_id = cast("str", start.json()["job_id"])
+        await asyncio.sleep(0.2)
+
+        point_ids = [str(i) for i in range(20)]
+        response = await client.post(
+            f"/api/plot/{job_id}/suggest-k",
+            json={"point_ids": point_ids, "max_k": 5},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert "suggested_k" in data
+    assert 2 <= data["suggested_k"] <= 5
+    assert len(data["scores"]) > 0
+    for score_entry in data["scores"]:
+        assert "k" in score_entry
+        assert "score" in score_entry
+
+
+@pytest.mark.asyncio
+async def test_suggest_k_by_cluster_index(
+    app: FastAPI, mock_compute_subcluster: None
+) -> None:
+    _ = mock_compute_subcluster
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        start = await client.post(
+            "/api/plot/compute",
+            json={"chromadb_collection_name": "test"},
+        )
+        job_id = cast("str", start.json()["job_id"])
+        await asyncio.sleep(0.2)
+
+        response = await client.post(
+            f"/api/plot/{job_id}/suggest-k",
+            json={"cluster_index": 0, "max_k": 5},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert "suggested_k" in data
+    assert 2 <= data["suggested_k"] <= 5

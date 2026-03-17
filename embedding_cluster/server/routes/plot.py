@@ -22,6 +22,9 @@ from embedding_cluster.server.models import (
     SubClusterRequest,
     SubClusterResponse,
     SuggestClustersRequest,
+    SuggestKRequest,
+    SuggestKResponse,
+    SuggestKScoreEntry,
 )
 from embedding_cluster.server.tasks import TaskState, TaskStatus, task_registry
 from embedding_cluster.settings import Settings
@@ -232,6 +235,188 @@ async def get_cluster_detail(
             for dist, point in page_items
         ],
     )
+
+
+@router.post(
+    "/{job_id}/sub-cluster",
+    response_model=SubClusterResponse,
+)
+async def sub_cluster_generic(
+    job_id: str,
+    request: SubClusterRequest,
+) -> SubClusterResponse:
+    """Sub-cluster by point_ids (recursive)."""
+    task = task_registry.get(job_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if task.status != TaskStatus.COMPLETED:
+        raise HTTPException(status_code=409, detail="Job not completed")
+
+    result = cast("dict[str, object]", task.result)
+    embeddings = cast("list[list[float]]", result["embeddings_standardized"])
+    points = cast("list[dict[str, object]]", result["points"])
+    point_ids_all = cast("list[str]", result["point_ids"])
+
+    id_to_index = {pid: i for i, pid in enumerate(point_ids_all)}
+
+    if request.point_ids is not None:
+        cluster_point_indices = [
+            id_to_index[pid] for pid in request.point_ids if pid in id_to_index
+        ]
+        if len(cluster_point_indices) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid point_ids found in job data",
+            )
+        parent_cluster_index = -1
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "point_ids is required for this endpoint. "
+                "Use /{job_id}/cluster/{cluster_index}/sub-cluster "
+                "for top-level cluster sub-clustering."
+            ),
+        )
+
+    num_sub = request.num_sub_clusters
+    if num_sub > len(cluster_point_indices):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"num_sub_clusters ({num_sub}) exceeds "
+                f"points count ({len(cluster_point_indices)})"
+            ),
+        )
+
+    import numpy as np
+
+    cluster_embeddings = np.array([embeddings[i] for i in cluster_point_indices])
+
+    def _compute_generic() -> SubClusterResponse:
+        from sklearn.cluster import KMeans
+
+        kmeans = KMeans(
+            n_clusters=num_sub,
+            n_init="auto",
+            random_state=171,
+            max_iter=1000,
+        )
+        sub_labels = kmeans.fit_predict(cluster_embeddings)
+
+        reduced = reduce_dimensions(
+            cluster_embeddings,
+            algorithm="pca",
+            n_components=3,
+        )
+
+        sub_points: list[SubClusterPoint] = []
+        for j, idx in enumerate(cluster_point_indices):
+            point = points[idx]
+            sub_points.append(
+                SubClusterPoint(
+                    id=cast("str", point["id"]),
+                    x=float(reduced[j, 0]),
+                    y=float(reduced[j, 1]),
+                    z=float(reduced[j, 2]),
+                    sub_cluster=int(sub_labels[j]),
+                    metadata=cast(
+                        "dict[str, object]",
+                        point["metadata"],
+                    ),
+                )
+            )
+
+        sub_cluster_infos: list[SubClusterInfo] = []
+        for si in range(num_sub):
+            count = int(np.sum(sub_labels == si))
+            color = f"hsl({si * 360 // num_sub}, 70%, 50%)"
+            sub_cluster_infos.append(SubClusterInfo(index=si, count=count, color=color))
+
+        return SubClusterResponse(
+            parent_cluster_index=parent_cluster_index,
+            points=sub_points,
+            sub_clusters=sub_cluster_infos,
+            total_points=len(cluster_point_indices),
+        )
+
+    return await asyncio.to_thread(_compute_generic)
+
+
+@router.post(
+    "/{job_id}/suggest-k",
+    response_model=SuggestKResponse,
+)
+async def suggest_k(
+    job_id: str,
+    request: SuggestKRequest,
+) -> SuggestKResponse:
+    """Suggest optimal sub-cluster count via silhouette analysis."""
+    task = task_registry.get(job_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if task.status != TaskStatus.COMPLETED:
+        raise HTTPException(status_code=409, detail="Job not completed")
+
+    result = cast("dict[str, object]", task.result)
+    embeddings = cast("list[list[float]]", result["embeddings_standardized"])
+    point_ids_all = cast("list[str]", result["point_ids"])
+    cluster_labels = cast("list[int]", result["cluster_labels"])
+
+    id_to_index = {pid: i for i, pid in enumerate(point_ids_all)}
+
+    if request.point_ids is not None:
+        indices = [id_to_index[pid] for pid in request.point_ids if pid in id_to_index]
+    elif request.cluster_index is not None:
+        indices = [
+            i for i, label in enumerate(cluster_labels) if label == request.cluster_index
+        ]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Either point_ids or cluster_index is required",
+        )
+
+    if len(indices) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="Need at least 3 points for silhouette analysis",
+        )
+
+    import numpy as np
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score as sk_silhouette_score
+    from sklearn.preprocessing import StandardScaler
+
+    subset_embeddings = np.array([embeddings[i] for i in indices])
+
+    def _compute_suggest_k() -> SuggestKResponse:
+        scaled = StandardScaler().fit_transform(subset_embeddings)
+        max_k = min(request.max_k, len(indices) - 1)
+        scores: list[SuggestKScoreEntry] = []
+        best_k = 2
+        best_score = -1.0
+
+        for k in range(2, max_k + 1):
+            kmeans = KMeans(
+                n_clusters=k,
+                n_init="auto",
+                random_state=171,
+                max_iter=1000,
+            )
+            labels = kmeans.fit_predict(scaled)
+            score = float(sk_silhouette_score(scaled, labels))
+            scores.append(SuggestKScoreEntry(k=k, score=score))
+            if score > best_score:
+                best_score = score
+                best_k = k
+
+        return SuggestKResponse(
+            suggested_k=best_k,
+            scores=scores,
+        )
+
+    return await asyncio.to_thread(_compute_suggest_k)
 
 
 @router.post(

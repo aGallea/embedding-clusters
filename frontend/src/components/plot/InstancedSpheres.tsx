@@ -7,18 +7,36 @@ export default function InstancedSpheres() {
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const visibleSubClusters = usePlotStore((state) => state.visibleSubClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
   const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const selectedPointIds = usePlotStore((state) => state.selectedPointIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
+  const subClusterColorMap = usePlotStore((state) => state.subClusterColorMap)
+  const drillPath = usePlotStore((state) => state.drillPath)
 
   const { filteredPoints, filteredPointIds } = useMemo(() => {
     if (!plotData) return { filteredPoints: [], filteredPointIds: [] }
 
-    const points = plotData.points.filter((p) => visibleClusters.has(p.cluster))
+    const points = plotData.points.filter((point) => {
+      if (!visibleClusters.has(point.cluster)) {
+        return false
+      }
+
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subClusterIndex = subClusterColorMap.get(point.id)
+        if (subClusterIndex === undefined) {
+          return false
+        }
+
+        return visibleSubClusters.has(subClusterIndex)
+      }
+
+      return true
+    })
     const ids = points.map(p => p.id)
     return { filteredPoints: points, filteredPointIds: ids }
-  }, [plotData, visibleClusters])
+  }, [plotData, visibleClusters, visibleSubClusters, subClusterColorMap, drillPath])
 
   useEffect(() => {
     if (!meshRef.current || filteredPoints.length === 0) return
@@ -40,8 +58,22 @@ export default function InstancedSpheres() {
       matrix.compose(position, quaternion, scale)
       mesh.setMatrixAt(i, matrix)
 
-      const dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
-      const c = colorObjects[p.cluster % colorObjects.length].clone().multiplyScalar(dimFactor)
+      let dimFactor: number
+      let baseColor: THREE.Color
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subIdx = subClusterColorMap.get(p.id)
+        if (subIdx !== undefined) {
+          baseColor = colorObjects[subIdx % colorObjects.length]
+          dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+        } else {
+          baseColor = colorObjects[p.cluster % colorObjects.length]
+          dimFactor = 0.15
+        }
+      } else {
+        baseColor = colorObjects[p.cluster % colorObjects.length]
+        dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      }
+      const c = baseColor.clone().multiplyScalar(dimFactor)
       if (isSelected) {
         c.lerp(new THREE.Color('#ffffff'), 0.45)
       }
@@ -50,7 +82,7 @@ export default function InstancedSpheres() {
 
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [filteredPoints, highlightedIds, selectedPointIds])
+  }, [filteredPoints, highlightedIds, selectedPointIds, subClusterColorMap, drillPath])
 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()

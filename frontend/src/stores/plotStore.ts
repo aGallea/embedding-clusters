@@ -1,9 +1,10 @@
 import { create } from 'zustand'
-import type { AnnotationsResponse, ClusterDetailResponse, PlotResponse, ReductionAlgorithm, SearchResult, SubClusterResponse } from '../types'
+import type { AnnotationsResponse, ClusterDetailResponse, DrillLevel, PlotResponse, ReductionAlgorithm, SearchResult, SubClusterResponse } from '../types'
 
 interface PlotState {
   plotData: PlotResponse | null
   visibleClusters: Set<number>
+  visibleSubClusters: Set<number>
   hoveredPointId: string | null
   renderMode: 'particles' | 'sprites' | 'spheres'
   pointSize: number
@@ -23,6 +24,9 @@ interface PlotState {
   annotations: AnnotationsResponse | null
   isLoadingClusterDetail: boolean
   isLoadingSubCluster: boolean
+  drillPath: DrillLevel[]
+  subClusterColorMap: Map<string, number> | null
+  isLoadingDrill: boolean
   imageField: string | null
   plotJobId: string | null
   plotCollectionName: string | null
@@ -51,6 +55,16 @@ interface PlotState {
   setAnnotations: (annotations: AnnotationsResponse | null) => void
   setIsLoadingClusterDetail: (loading: boolean) => void
   setIsLoadingSubCluster: (loading: boolean) => void
+  drillIntoCluster: (clusterIndex: number, subClusterData: SubClusterResponse) => void
+  drillIntoSubCluster: (subClusterIndex: number, subClusterData: SubClusterResponse) => void
+  navigateToLevel: (levelIndex: number) => void
+  navigateBack: () => void
+  resetDrill: () => void
+  setIsLoadingDrill: (loading: boolean) => void
+  isolateCluster: (index: number) => void
+  toggleSubCluster: (index: number) => void
+  isolateSubCluster: (index: number) => void
+  resetVisibleSubClusters: (indices: number[]) => void
   clearClusterDrillDown: () => void
   setImageField: (field: string | null) => void
   setPlotJobId: (jobId: string | null) => void
@@ -69,9 +83,22 @@ export const CLUSTER_COLORS = [
   '#e5c494', '#b3b3b3', '#8dd3c7', '#fb8072', '#80b1d3',
 ]
 
+function buildColorMap(data: SubClusterResponse): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const point of data.points) {
+    map.set(point.id, point.sub_cluster)
+  }
+  return map
+}
+
+function buildVisibleSubClusterSet(data: SubClusterResponse): Set<number> {
+  return new Set(data.sub_clusters.map((subCluster) => subCluster.index))
+}
+
 export const usePlotStore = create<PlotState>((set) => ({
   plotData: null,
   visibleClusters: new Set(),
+  visibleSubClusters: new Set(),
   hoveredPointId: null,
   renderMode: 'particles',
   pointSize: 5,
@@ -91,6 +118,9 @@ export const usePlotStore = create<PlotState>((set) => ({
   annotations: null,
   isLoadingClusterDetail: false,
   isLoadingSubCluster: false,
+  drillPath: [],
+  subClusterColorMap: null,
+  isLoadingDrill: false,
   imageField: null,
   plotJobId: null,
   plotCollectionName: null,
@@ -145,6 +175,98 @@ export const usePlotStore = create<PlotState>((set) => ({
   setAnnotations: (annotations) => set({ annotations }),
   setIsLoadingClusterDetail: (loading) => set({ isLoadingClusterDetail: loading }),
   setIsLoadingSubCluster: (loading) => set({ isLoadingSubCluster: loading }),
+
+  drillIntoCluster: (clusterIndex, subClusterData) =>
+    set((state) => {
+      const cluster = state.plotData?.clusters.find(c => c.index === clusterIndex)
+      const label = cluster?.name ?? `Cluster ${clusterIndex}`
+      const pointIds = subClusterData.points.map(p => p.id)
+      const level: DrillLevel = { label, pointIds, subClusterData }
+      return {
+        drillPath: [level],
+        subClusterColorMap: buildColorMap(subClusterData),
+        visibleSubClusters: buildVisibleSubClusterSet(subClusterData),
+        isLoadingDrill: false,
+      }
+    }),
+
+  drillIntoSubCluster: (_subClusterIndex, subClusterData) =>
+    set((state) => {
+      const label = `Sub ${_subClusterIndex}`
+      const pointIds = subClusterData.points.map(p => p.id)
+      const level: DrillLevel = { label, pointIds, subClusterData }
+      return {
+        drillPath: [...state.drillPath, level],
+        subClusterColorMap: buildColorMap(subClusterData),
+        visibleSubClusters: buildVisibleSubClusterSet(subClusterData),
+        isLoadingDrill: false,
+      }
+    }),
+
+  navigateToLevel: (levelIndex) =>
+    set((state) => {
+      if (levelIndex < 0) {
+        return { drillPath: [], subClusterColorMap: null }
+      }
+      const newPath = state.drillPath.slice(0, levelIndex + 1)
+      const currentLevel = newPath[newPath.length - 1]
+      return {
+        drillPath: newPath,
+        subClusterColorMap: currentLevel
+          ? buildColorMap(currentLevel.subClusterData)
+          : null,
+        visibleSubClusters: currentLevel
+          ? buildVisibleSubClusterSet(currentLevel.subClusterData)
+          : new Set(),
+      }
+    }),
+
+  navigateBack: () =>
+    set((state) => {
+      if (state.drillPath.length === 0) return {}
+      const newPath = state.drillPath.slice(0, -1)
+      const currentLevel = newPath[newPath.length - 1]
+      return {
+        drillPath: newPath,
+        subClusterColorMap: currentLevel
+          ? buildColorMap(currentLevel.subClusterData)
+          : null,
+        visibleSubClusters: currentLevel
+          ? buildVisibleSubClusterSet(currentLevel.subClusterData)
+          : new Set(),
+      }
+    }),
+
+  resetDrill: () =>
+    set({
+      drillPath: [],
+      subClusterColorMap: null,
+      visibleSubClusters: new Set(),
+      isLoadingDrill: false,
+    }),
+
+  setIsLoadingDrill: (loading) => set({ isLoadingDrill: loading }),
+
+  isolateCluster: (index) =>
+    set(() => ({ visibleClusters: new Set([index]) })),
+
+  toggleSubCluster: (index) =>
+    set((state) => {
+      const newVisible = new Set(state.visibleSubClusters)
+      if (newVisible.has(index)) {
+        newVisible.delete(index)
+      } else {
+        newVisible.add(index)
+      }
+      return { visibleSubClusters: newVisible }
+    }),
+
+  isolateSubCluster: (index) =>
+    set(() => ({ visibleSubClusters: new Set([index]) })),
+
+  resetVisibleSubClusters: (indices) =>
+    set({ visibleSubClusters: new Set(indices) }),
+
   setImageField: (field) => set({ imageField: field }),
   setPlotJobId: (jobId) => set({ plotJobId: jobId }),
   resetPlotJobId: () => set({ plotJobId: null }),

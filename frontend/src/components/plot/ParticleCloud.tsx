@@ -7,10 +7,13 @@ export default function ParticleCloud() {
   const pointsRef = useRef<THREE.Points>(null!)
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const visibleSubClusters = usePlotStore((state) => state.visibleSubClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
   const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const selectedPointIds = usePlotStore((state) => state.selectedPointIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
+  const subClusterColorMap = usePlotStore((state) => state.subClusterColorMap)
+  const drillPath = usePlotStore((state) => state.drillPath)
 
   // Memoize positions, colors, and the mapping back to original point IDs
   const { positions, colors, filteredPointIds, selectedPositions, selectedColors } = useMemo(() => {
@@ -24,7 +27,22 @@ export default function ParticleCloud() {
       }
     }
 
-    const filteredPoints = plotData.points.filter((p) => visibleClusters.has(p.cluster))
+    const filteredPoints = plotData.points.filter((point) => {
+      if (!visibleClusters.has(point.cluster)) {
+        return false
+      }
+
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subClusterIndex = subClusterColorMap.get(point.id)
+        if (subClusterIndex === undefined) {
+          return false
+        }
+
+        return visibleSubClusters.has(subClusterIndex)
+      }
+
+      return true
+    })
     const count = filteredPoints.length
     const selectedPoints = filteredPoints.filter((p) => selectedPointIds.has(p.id))
 
@@ -47,8 +65,21 @@ export default function ParticleCloud() {
       pos[i * 3 + 2] = p.z
 
       // Color
-      const color = colorObjects[p.cluster % colorObjects.length]
-      const dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      let dimFactor: number
+      let color: THREE.Color
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subIdx = subClusterColorMap.get(p.id)
+        if (subIdx !== undefined) {
+          color = colorObjects[subIdx % colorObjects.length]
+          dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+        } else {
+          color = colorObjects[p.cluster % colorObjects.length]
+          dimFactor = 0.15
+        }
+      } else {
+        color = colorObjects[p.cluster % colorObjects.length]
+        dimFactor = hasHighlights && !highlightedIds.has(p.id) ? 0.15 : 1.0
+      }
       cols[i * 3] = color.r * dimFactor
       cols[i * 3 + 1] = color.g * dimFactor
       cols[i * 3 + 2] = color.b * dimFactor
@@ -75,7 +106,7 @@ export default function ParticleCloud() {
       selectedPositions: selectedPos,
       selectedColors: selectedCols,
     }
-  }, [plotData, visibleClusters, highlightedIds, selectedPointIds])
+  }, [plotData, visibleClusters, visibleSubClusters, highlightedIds, selectedPointIds, subClusterColorMap, drillPath])
 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     // Stop event propagation so we don't trigger other things

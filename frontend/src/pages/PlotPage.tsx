@@ -22,6 +22,7 @@ export default function PlotPage() {
   const resetPlotCollectionName = usePlotStore((state) => state.resetPlotCollectionName)
   const clearClusterDrillDown = usePlotStore((state) => state.clearClusterDrillDown)
   const resetVisibleClusters = usePlotStore((state) => state.resetVisibleClusters)
+  const resetDrill = usePlotStore((state) => state.resetDrill)
   const plotContainerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [searchParams] = useSearchParams()
@@ -34,9 +35,10 @@ export default function PlotPage() {
       resetPlotJobId()
       resetPlotCollectionName()
       clearClusterDrillDown()
+      resetDrill()
       resetVisibleClusters(0)
     }
-  }, [clearClusterDrillDown, collectionName, plotCollectionName, plotJobId, resetPlotCollectionName, resetPlotJobId, resetVisibleClusters, setPlotData])
+  }, [clearClusterDrillDown, collectionName, plotCollectionName, plotJobId, resetDrill, resetPlotCollectionName, resetPlotJobId, resetVisibleClusters, setPlotData])
 
   const toggleFullscreen = useCallback(() => {
     if (!plotContainerRef.current) return

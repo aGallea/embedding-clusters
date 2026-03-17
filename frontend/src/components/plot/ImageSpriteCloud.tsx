@@ -81,25 +81,59 @@ function FallbackSprite({ point, color, size }: { point: PlotPoint; color: strin
 export default function ImageSpriteCloud() {
   const plotData = usePlotStore((state) => state.plotData)
   const visibleClusters = usePlotStore((state) => state.visibleClusters)
+  const visibleSubClusters = usePlotStore((state) => state.visibleSubClusters)
   const pointSize = usePlotStore((state) => state.pointSize)
   const highlightedIds = usePlotStore((state) => state.highlightedIds)
   const selectedPointIds = usePlotStore((state) => state.selectedPointIds)
   const setHoveredPointId = usePlotStore((state) => state.setHoveredPointId)
+  const subClusterColorMap = usePlotStore((state) => state.subClusterColorMap)
+  const drillPath = usePlotStore((state) => state.drillPath)
 
   const visiblePoints = useMemo(() => {
     if (!plotData) return []
-    return plotData.points.filter((p) => visibleClusters.has(p.cluster))
-  }, [plotData, visibleClusters])
+    return plotData.points.filter((point) => {
+      if (!visibleClusters.has(point.cluster)) {
+        return false
+      }
+
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subClusterIndex = subClusterColorMap.get(point.id)
+        if (subClusterIndex === undefined) {
+          return false
+        }
+
+        return visibleSubClusters.has(subClusterIndex)
+      }
+
+      return true
+    })
+  }, [plotData, visibleClusters, visibleSubClusters, subClusterColorMap, drillPath])
 
   const spritesToRender = useMemo(() => {
     return visiblePoints.slice(0, MAX_SPRITES).map((point) => {
-      const color = CLUSTER_COLORS[point.cluster % CLUSTER_COLORS.length]
+      let color: string
+      let opacity: number
+
+      if (subClusterColorMap && drillPath.length > 0) {
+        const subIdx = subClusterColorMap.get(point.id)
+        if (subIdx !== undefined) {
+          color = CLUSTER_COLORS[subIdx % CLUSTER_COLORS.length]
+          const isHighlighted = highlightedIds.size === 0 || highlightedIds.has(point.id)
+          opacity = isHighlighted ? 1.0 : 0.15
+        } else {
+          color = CLUSTER_COLORS[point.cluster % CLUSTER_COLORS.length]
+          opacity = 0.15
+        }
+      } else {
+        color = CLUSTER_COLORS[point.cluster % CLUSTER_COLORS.length]
+        const isHighlighted = highlightedIds.size === 0 || highlightedIds.has(point.id)
+        opacity = isHighlighted ? 1.0 : 0.15
+      }
+
       const imageUrl = getImageUrl(point.metadata)
-      const isHighlighted = highlightedIds.size === 0 || highlightedIds.has(point.id)
-      const opacity = isHighlighted ? 1.0 : 0.15
       return { point, color, imageUrl, opacity }
     })
-  }, [visiblePoints, highlightedIds])
+  }, [visiblePoints, highlightedIds, subClusterColorMap, drillPath])
 
   const selectedSprites = useMemo(() => {
     return visiblePoints

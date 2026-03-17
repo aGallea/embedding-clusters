@@ -175,6 +175,7 @@ class ClusterDetailResponse(BaseModel):
 
 class SubClusterRequest(BaseModel):
     num_sub_clusters: int = 3
+    point_ids: list[str] | None = None
 
     @field_validator("num_sub_clusters")
     @classmethod
@@ -205,6 +206,30 @@ class SubClusterResponse(BaseModel):
     points: list[SubClusterPoint]
     sub_clusters: list[SubClusterInfo]
     total_points: int
+
+
+class SuggestKRequest(BaseModel):
+    point_ids: list[str] | None = None
+    cluster_index: int | None = None
+    max_k: int = 10
+
+    @field_validator("max_k")
+    @classmethod
+    def validate_max_k(cls, v: int) -> int:
+        if v < 3:
+            msg = "max_k must be at least 3"
+            raise ValueError(msg)
+        return v
+
+
+class SuggestKScoreEntry(BaseModel):
+    k: int
+    score: float
+
+
+class SuggestKResponse(BaseModel):
+    suggested_k: int
+    scores: list[SuggestKScoreEntry]
 
 
 class AnnotationUpdate(BaseModel):
