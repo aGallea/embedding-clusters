@@ -246,3 +246,38 @@ class ClusterAnnotation(BaseModel):
 class AnnotationsResponse(BaseModel):
     job_id: str
     clusters: dict[str, ClusterAnnotation]
+
+
+class AiNamingRequest(BaseModel):
+    job_id: str
+    cluster_indices: list[int]
+    api_key: str
+    model: str
+    base_url: str | None = None
+    temperature: float = 0.5
+
+
+class AiNamingResponse(BaseModel):
+    names: dict[str, str]
+
+
+class AiSubClusterNamingRequest(BaseModel):
+    job_id: str
+    point_ids: list[str]
+    sub_cluster_labels: list[int]
+    api_key: str
+    model: str
+    base_url: str | None = None
+    temperature: float = 0.5
+    parent_cluster_name: str | None = None
+
+
+class AiTestConnectionRequest(BaseModel):
+    api_key: str
+    model: str
+    base_url: str | None = None
+
+
+class AiTestConnectionResponse(BaseModel):
+    success: bool
+    error: str | None = None

@@ -36,12 +36,6 @@ class TestSettingsDefaults:
         assert s.image_field is None
         assert s.id_field is None
 
-    def test_default_gpt_settings(self) -> None:
-        s = Settings()
-        assert s.gpt_generate_cluster_name is False
-        assert s.gpt_default_model == "gpt-3.5-turbo"
-        assert s.gpt_default_temperature == pytest.approx(0.51)
-
     def test_default_model_names(self) -> None:
         s = Settings()
         assert s.image_model_name == "openai/clip-vit-base-patch32"
@@ -85,11 +79,6 @@ class TestSettingsEnvVars:
         monkeypatch.setenv("TEXT_DISPLAY_FIELDS", '["productDisplayName"]')
         s = Settings()
         assert s.text_display_fields == ["productDisplayName"]
-
-    def test_boolean_field_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("GPT_GENERATE_CLUSTER_NAME", "true")
-        s = Settings()
-        assert s.gpt_generate_cluster_name is True
 
     def test_start_end_lines_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("INDEX_START_LINE", "5")
