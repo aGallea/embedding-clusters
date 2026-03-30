@@ -130,8 +130,8 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
       {/* Collection Selection */}
       <CollapsibleSection title="Collection" defaultOpen={true}>
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-gray-600">Collection</label>
           <select
+            aria-label="Collection"
             className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
             value={selectedCollection}
             onChange={(e) => {
@@ -285,7 +285,6 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
           {/* Text Display Fields */}
           <CollapsibleSection title="Display Fields" defaultOpen={false}>
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Display Fields</label>
               <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
                 {collectionDetails.metadata_fields.map((field) => (
                   <div key={field} className="flex items-center">
@@ -308,8 +307,8 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
           {/* Image Field */}
           <CollapsibleSection title="Image Field" defaultOpen={false}>
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Image Field</label>
               <select
+                aria-label="Image Field"
                 className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
                 value={imageField}
                 onChange={(e) => setImageField(e.target.value)}
