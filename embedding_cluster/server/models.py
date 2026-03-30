@@ -70,9 +70,6 @@ class PlotRequest(BaseModel):
     num_clusters: int = 10
     text_display_fields: list[str] | None = None
     image_field: str | None = None
-    gpt_generate_cluster_name: bool = False
-    gpt_default_model: str = "gpt-3.5-turbo"
-    gpt_default_temperature: float = 0.51
     reduction_algorithm: Literal["tsne", "umap", "pca"] = "tsne"
     tsne_perplexity: float = 30.0
     tsne_learning_rate: str = "auto"
@@ -199,6 +196,7 @@ class SubClusterInfo(BaseModel):
     index: int
     count: int
     color: str
+    name: str | None = None
 
 
 class SubClusterResponse(BaseModel):

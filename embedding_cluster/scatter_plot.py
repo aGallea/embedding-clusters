@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import logging
-import random
 from typing import TYPE_CHECKING, Any
 
 import chromadb
 import numpy as np
 import plotly.graph_objects as go
 from dash import Dash, Input, Output, callback, dcc, html, no_update
-from openai import OpenAI
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -69,31 +67,6 @@ def reduce_dimensions(
         raise ValueError(msg)
     result: np.ndarray = reducer.fit_transform(embeddings)
     return result
-
-
-def gpt_get_cluster_name(info: str, settings: Settings) -> str:
-    openai_client = OpenAI()
-    messages: list[dict[str, str]] = [
-        {
-            "role": "system",
-            "content": (
-                "Your role is to find a very short (max 5 words), concise "
-                "name for a group of items, one name to rule them all. "
-                "the user will provide a list of item names. do your best"
-            ),
-        },
-        {
-            "role": "user",
-            "content": info,
-        },
-    ]
-    completion = openai_client.chat.completions.create(
-        model=settings.gpt_default_model,
-        temperature=settings.gpt_default_temperature,
-        messages=messages,  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
-    )
-    content = completion.choices[0].message.content or ""
-    return (content[:30] + "..") if len(content) > 30 else content
 
 
 def load_chromadb_collection(settings: Settings) -> Any:
@@ -201,9 +174,9 @@ def generate_cluster_props(
     num_clusters: int,
     pred_arr: Any,
     collection_content_text_display: list[str],
-    settings: Settings,
     num_products_for_cluster_name: int = 10,
 ) -> tuple[list[list[int]], list[str]]:
+    _ = (collection_content_text_display, num_products_for_cluster_name)
     clusters_indices: list[list[int]] = []
     cluster_names: list[str] = []
     group_index = 1
@@ -211,28 +184,8 @@ def generate_cluster_props(
         curr_cluster_indices = [i for i, x in enumerate(pred_arr) if x == cluster_i]
         clusters_indices.append(curr_cluster_indices)
         logger.info("Generating cluster %d names ...", cluster_i)
-        if settings.gpt_generate_cluster_name is True:
-            random_product_indexes = random.sample(
-                range(0, len(curr_cluster_indices)),
-                min(
-                    num_products_for_cluster_name,
-                    len(curr_cluster_indices),
-                ),
-            )
-            curr_descriptions = ""
-            for product_index in random_product_indexes:
-                idx = curr_cluster_indices[product_index]
-                item = (
-                    collection_content_text_display[idx]
-                    if idx < len(collection_content_text_display)
-                    else f"Item {idx}"
-                )
-                curr_descriptions += f"name: {item} \n"
-            cluster_name = gpt_get_cluster_name(curr_descriptions, settings)
-            cluster_names.append(cluster_name)
-        else:
-            cluster_names.append(f"Group {group_index}")
-            group_index += 1
+        cluster_names.append(f"Group {group_index}")
+        group_index += 1
     return clusters_indices, cluster_names
 
 
@@ -288,7 +241,7 @@ def compute_plot_data(settings: Settings) -> dict[str, Any]:
     )
 
     clusters_indices, cluster_names = generate_cluster_props(
-        num_clusters, pred_arr, collection_content_text_display, settings
+        num_clusters, pred_arr, collection_content_text_display
     )
 
     # Build structured point data
