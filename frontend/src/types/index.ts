@@ -65,9 +65,6 @@ export interface PlotRequest {
   num_clusters?: number
   text_display_fields?: string[]
   image_field?: string
-  gpt_generate_cluster_name?: boolean
-  gpt_default_model?: string
-  gpt_default_temperature?: number
   reduction_algorithm?: ReductionAlgorithm
   tsne_perplexity?: number
   tsne_learning_rate?: string
@@ -184,6 +181,7 @@ export interface SubClusterInfo {
   index: number;
   count: number;
   color: string;
+  name?: string;
 }
 
 export interface SubClusterResponse {
@@ -234,4 +232,48 @@ export interface ClusterAnnotation {
 export interface AnnotationsResponse {
   job_id: string;
   clusters: Record<string, ClusterAnnotation>;
+}
+
+// AI Naming
+export interface AiSettings {
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseUrl: string;
+  temperature: number;
+}
+
+export interface AiNamingRequest {
+  job_id: string;
+  cluster_indices: number[];
+  api_key: string;
+  model: string;
+  base_url?: string;
+  temperature?: number;
+}
+
+export interface AiNamingResponse {
+  names: Record<string, string>;
+}
+
+export interface AiSubClusterNamingRequest {
+  job_id: string;
+  point_ids: string[];
+  sub_cluster_labels: number[];
+  api_key: string;
+  model: string;
+  base_url?: string;
+  temperature?: number;
+  parent_cluster_name?: string;
+}
+
+export interface AiTestConnectionRequest {
+  api_key: string;
+  model: string;
+  base_url?: string;
+}
+
+export interface AiTestConnectionResponse {
+  success: boolean;
+  error: string | null;
 }

@@ -36,10 +36,6 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
   const [numClusters, setNumClusters] = useState(10)
   const [textDisplayFields, setTextDisplayFields] = useState<string[]>([])
   const [imageField, setImageField] = useState('')
-  const [gptEnabled, setGptEnabled] = useState(false)
-  const [gptModel, setGptModel] = useState('gpt-3.5-turbo')
-  const [gptTemperature, setGptTemperature] = useState(0.51)
-
   const {
     renderMode, setRenderMode, pointSize, setPointSize,
     reductionAlgorithm, setReductionAlgorithm,
@@ -100,9 +96,6 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
       num_clusters: numClusters,
       text_display_fields: textDisplayFields,
       image_field: imageField || undefined,
-      gpt_generate_cluster_name: gptEnabled,
-      gpt_default_model: gptEnabled ? gptModel : undefined,
-      gpt_default_temperature: gptEnabled ? gptTemperature : undefined,
       reduction_algorithm: reductionAlgorithm,
       ...(reductionAlgorithm === 'tsne' && {
         tsne_perplexity: tsnePerplexity,
@@ -317,51 +310,6 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
                   </option>
                 ))}
               </select>
-            </div>
-          </CollapsibleSection>
-
-          {/* GPT Settings */}
-          <CollapsibleSection title="GPT Cluster Naming" defaultOpen={false}>
-            <div className="space-y-1.5">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="gpt-enabled"
-                  aria-label="GPT Cluster Naming"
-                  checked={gptEnabled}
-                  onChange={(e) => setGptEnabled(e.target.checked)}
-                  className="mr-2"
-                />
-                <label htmlFor="gpt-enabled" className="text-xs font-medium text-gray-600 cursor-pointer">
-                  Enable
-                </label>
-              </div>
-
-              {gptEnabled && (
-                <div className="pl-6 space-y-2">
-                  <div>
-                    <label className="block text-xs text-gray-500">Model</label>
-                    <input
-                      type="text"
-                      value={gptModel}
-                      onChange={(e) => setGptModel(e.target.value)}
-                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500">Temperature: {gptTemperature}</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="1"
-                      value={gptTemperature}
-                      onChange={(e) => setGptTemperature(Number(e.target.value))}
-                      className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </CollapsibleSection>
 
