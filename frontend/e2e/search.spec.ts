@@ -208,3 +208,42 @@ test.describe('Semantic Search', () => {
   })
 
 })
+
+test.describe('Plot Sidebar', () => {
+  test('plot sidebar does not duplicate visible labels', async ({ page }) => {
+    // Mock the API calls so we don't need real ChromaDB data
+    await page.route('**/api/collections', async route => {
+      await route.fulfill({ json: [{ name: 'fashionimageUrl', count: 100 }] })
+    })
+    await page.route('**/api/collections/fashionimageUrl', async route => {
+      await route.fulfill({
+        json: { name: 'fashionimageUrl', count: 100, metadata_fields: ['productDisplayName', 'imageUrl'] }
+      })
+    })
+
+    // Navigate with collection param
+    await page.goto('/plot?collection=fashionimageUrl')
+
+    // Wait for the collection dropdown to be populated with options
+    await expect(
+      page.locator('select option:not([value=""])').first()
+    ).toBeAttached({ timeout: 10_000 })
+
+    const sidebar = page.getByTestId('plot-sidebar')
+
+    await expect(sidebar.getByRole('button', { name: 'Collection', exact: true })).toBeVisible({ timeout: 5_000 })
+
+    const displayFieldsBtn = sidebar.getByRole('button', { name: 'Display Fields', exact: true })
+    const imageFieldBtn = sidebar.getByRole('button', { name: 'Image Field', exact: true })
+
+    await displayFieldsBtn.click()
+    await imageFieldBtn.click()
+
+    await expect(sidebar.locator('label').filter({ hasText: /^Collection$/ })).toHaveCount(0)
+    await expect(sidebar.locator('label').filter({ hasText: /^Display Fields$/ })).toHaveCount(0)
+    await expect(sidebar.locator('label').filter({ hasText: /^Image Field$/ })).toHaveCount(0)
+
+    await expect(sidebar.getByRole('combobox', { name: 'Collection' })).toBeVisible()
+    await expect(sidebar.getByRole('combobox', { name: 'Image Field' })).toBeVisible()
+  })
+})
