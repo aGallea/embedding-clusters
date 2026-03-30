@@ -15,7 +15,7 @@ dependencies = [
     "dash>=3.4,<4",
     "plotly>=6.5,<7",
     "aiohttp>=3.11,<4",
-    "openai>=1.60,<2",
+    "litellm>=1.65,<2",
     "scikit-learn>=1.6,<2",
     "numpy>=2.2,<3",
     "Pillow>=11,<12",
@@ -83,7 +83,7 @@ module = [
     "plotly.*",
     "sklearn.*",
     "PIL.*",
-    "openai.*",
+    "litellm.*",
     "aiohttp.*",
     "umap.*",
 ]
