@@ -174,9 +174,6 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
           {/* Reduction Algorithm */}
           <CollapsibleSection title="Reduction Algorithm" defaultOpen={false}>
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">
-                Reduction Algorithm
-              </label>
               <div className="flex space-x-2">
                 {(['tsne', 'umap', 'pca'] as const).map((algo) => (
                   <label key={algo} className="flex items-center text-xs cursor-pointer">
@@ -330,12 +327,13 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
                 <input
                   type="checkbox"
                   id="gpt-enabled"
+                  aria-label="GPT Cluster Naming"
                   checked={gptEnabled}
                   onChange={(e) => setGptEnabled(e.target.checked)}
                   className="mr-2"
                 />
                 <label htmlFor="gpt-enabled" className="text-xs font-medium text-gray-600 cursor-pointer">
-                  GPT Cluster Naming
+                  Enable
                 </label>
               </div>
 
