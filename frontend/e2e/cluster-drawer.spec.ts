@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
+import { CLUSTER_COLORS } from '../src/stores/plotStore'
 
 type PlotStoreSnapshot = {
   selectedPointIds?: Set<string>
@@ -809,5 +810,65 @@ test.describe('Cluster detail drawer', () => {
     await root.click()
 
     await expect(breadcrumb).toBeHidden({ timeout: 5_000 })
+  })
+
+  test('sub-cluster legend uses palette colors by index', async ({ page, plotPage: _ }) => {
+    const makeSubClusterResponse = () => ({
+      parent_cluster_index: 0,
+      total_points: 6,
+      points: [
+        { id: 'a', x: 0, y: 0, z: 0, sub_cluster: 0, metadata: {} },
+        { id: 'b', x: 1, y: 0, z: 0, sub_cluster: 0, metadata: {} },
+        { id: 'c', x: 0, y: 1, z: 0, sub_cluster: 1, metadata: {} },
+        { id: 'd', x: 1, y: 1, z: 0, sub_cluster: 1, metadata: {} },
+        { id: 'e', x: 0, y: 0, z: 1, sub_cluster: 2, metadata: {} },
+        { id: 'f', x: 1, y: 0, z: 1, sub_cluster: 2, metadata: {} },
+      ],
+      sub_clusters: [
+        { index: 0, count: 2, color: 'hsl(120, 70%, 50%)' },
+        { index: 1, count: 2, color: 'hsl(240, 70%, 50%)' },
+        { index: 2, count: 2, color: 'hsl(0, 70%, 50%)' },
+      ],
+    })
+
+    const expectedRgb = (hex: string) => {
+      const clean = hex.replace('#', '')
+      const r = parseInt(clean.slice(0, 2), 16)
+      const g = parseInt(clean.slice(2, 4), 16)
+      const b = parseInt(clean.slice(4, 6), 16)
+      return `rgb(${r}, ${g}, ${b})`
+    }
+
+    await page.route(/.*\/api\/plot\/.*\/cluster\/\d+\/sub-cluster$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(makeSubClusterResponse()),
+      })
+    })
+
+    await expect(
+      page.getByRole('button', { name: 'Compute Plot' })
+    ).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: 'Compute Plot' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 120_000 })
+
+    await page.getByTestId('cluster-legend-name-0').click()
+    await expect(page.getByTestId('cluster-detail-drawer')).toBeVisible({ timeout: 10_000 })
+
+    const computeBtn = page.getByTestId('sub-cluster-compute')
+    await expect(computeBtn).toBeVisible({ timeout: 5_000 })
+    await computeBtn.click()
+
+    await expect(page.getByTestId('drill-breadcrumb')).toBeVisible({ timeout: 15_000 })
+
+    const response = makeSubClusterResponse()
+    for (const sub of response.sub_clusters) {
+      const swatch = page.getByTestId(`subcluster-legend-swatch-${sub.index}`)
+      await expect(swatch).toBeVisible({ timeout: 10_000 })
+      const color = await swatch.evaluate((el) => getComputedStyle(el).backgroundColor)
+      expect(color).toBe(expectedRgb(CLUSTER_COLORS[sub.index]))
+    }
   })
 })

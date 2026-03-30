@@ -112,6 +112,7 @@ export default function ClusterLegend() {
                     className="flex items-center space-x-2 px-1 py-0.5"
                   >
                     <span
+                      data-testid={`subcluster-legend-swatch-${sc.index}`}
                       className="w-3 h-3 rounded-full shrink-0"
                       style={{ backgroundColor: color }}
                     />
