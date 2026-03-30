@@ -1,4 +1,10 @@
-import type { AiNamingRequest, AiNamingResponse, AiTestConnectionRequest, AiTestConnectionResponse } from "../types";
+import type {
+  AiNamingRequest,
+  AiNamingResponse,
+  AiSubClusterNamingRequest,
+  AiTestConnectionRequest,
+  AiTestConnectionResponse,
+} from "../types";
 import { apiPost } from "./client";
 
 const AI_SETTINGS_KEY = "ai-cluster-naming-settings";
@@ -46,7 +52,7 @@ export async function nameAiClusters(
 }
 
 export async function nameAiSubClusters(
-  request: AiNamingRequest,
+  request: AiSubClusterNamingRequest,
 ): Promise<AiNamingResponse> {
   return apiPost<AiNamingResponse>("/ai/name-sub-clusters", request);
 }

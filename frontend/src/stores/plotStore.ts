@@ -27,6 +27,8 @@ interface PlotState {
   drillPath: DrillLevel[]
   subClusterColorMap: Map<string, number> | null
   isLoadingDrill: boolean
+  isNamingClusters: boolean
+  isNamingSubClusters: boolean
   imageField: string | null
   plotJobId: string | null
   plotCollectionName: string | null
@@ -61,6 +63,9 @@ interface PlotState {
   navigateBack: () => void
   resetDrill: () => void
   setIsLoadingDrill: (loading: boolean) => void
+  setIsNamingClusters: (loading: boolean) => void
+  setIsNamingSubClusters: (loading: boolean) => void
+  updateSubClusterNames: (names: Record<string, string>) => void
   isolateCluster: (index: number) => void
   toggleSubCluster: (index: number) => void
   isolateSubCluster: (index: number) => void
@@ -121,6 +126,8 @@ export const usePlotStore = create<PlotState>((set) => ({
   drillPath: [],
   subClusterColorMap: null,
   isLoadingDrill: false,
+  isNamingClusters: false,
+  isNamingSubClusters: false,
   imageField: null,
   plotJobId: null,
   plotCollectionName: null,
@@ -246,6 +253,25 @@ export const usePlotStore = create<PlotState>((set) => ({
     }),
 
   setIsLoadingDrill: (loading) => set({ isLoadingDrill: loading }),
+
+  setIsNamingClusters: (loading) => set({ isNamingClusters: loading }),
+  setIsNamingSubClusters: (loading) => set({ isNamingSubClusters: loading }),
+
+  updateSubClusterNames: (names) =>
+    set((state) => {
+      if (state.drillPath.length === 0) return {}
+      const newPath = [...state.drillPath]
+      const currentLevel = { ...newPath[newPath.length - 1] }
+      currentLevel.subClusterData = {
+        ...currentLevel.subClusterData,
+        sub_clusters: currentLevel.subClusterData.sub_clusters.map((sc) => ({
+          ...sc,
+          name: names[String(sc.index)] ?? sc.name,
+        })),
+      }
+      newPath[newPath.length - 1] = currentLevel
+      return { drillPath: newPath }
+    }),
 
   isolateCluster: (index) =>
     set(() => ({ visibleClusters: new Set([index]) })),

@@ -8,7 +8,8 @@ import {
   subCluster,
   subClusterByPointIds,
 } from '../../api/plot'
-import type { ClusterDetailResponse, SuggestKResponse } from '../../types'
+import { loadAiSettings, nameAiSubClusters } from '../../api/ai'
+import type { ClusterDetailResponse, SubClusterResponse, SuggestKResponse } from '../../types'
 import SelectedPointsDistancePanel from './SelectedPointsDistancePanel'
 
 interface ClusterDetailDrawerProps {
@@ -35,6 +36,9 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
   const drillIntoSubCluster = usePlotStore((s) => s.drillIntoSubCluster)
   const setIsLoadingDrill = usePlotStore((s) => s.setIsLoadingDrill)
   const isLoadingDrill = usePlotStore((s) => s.isLoadingDrill)
+  const isNamingSubClusters = usePlotStore((s) => s.isNamingSubClusters)
+  const setIsNamingSubClusters = usePlotStore((s) => s.setIsNamingSubClusters)
+  const updateSubClusterNames = usePlotStore((s) => s.updateSubClusterNames)
 
   const [page, setPage] = useState(1)
   const [isEditingName, setIsEditingName] = useState(false)
@@ -99,6 +103,35 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     setSelectedSubClusterIndex(null)
     setExpandedSubClusterIndex(null)
   }, [currentLevel?.label])
+
+  const autoNameSubClusters = useCallback(async (
+    data: SubClusterResponse,
+    parentName: string | undefined,
+  ) => {
+    const settings = loadAiSettings()
+    if (!settings.apiKey || !jobId) return
+
+    setIsNamingSubClusters(true)
+    try {
+      const pointIds = data.points.map((p) => p.id)
+      const labels = data.points.map((p) => p.sub_cluster)
+      const response = await nameAiSubClusters({
+        job_id: jobId,
+        point_ids: pointIds,
+        sub_cluster_labels: labels,
+        api_key: settings.apiKey,
+        model: settings.provider ? `${settings.provider}/${settings.model}` : settings.model,
+        base_url: settings.baseUrl || undefined,
+        temperature: settings.temperature,
+        parent_cluster_name: parentName,
+      })
+      updateSubClusterNames(response.names)
+    } catch {
+      // AI naming is best-effort; failures are silent
+    } finally {
+      setIsNamingSubClusters(false)
+    }
+  }, [jobId, setIsNamingSubClusters, updateSubClusterNames])
 
   const handlePageChange = useCallback((newPage: number) => {
     if (clusterIndex == null) return
@@ -224,12 +257,16 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
         })
         setSelectedSubClusterIndex(null)
         drillIntoSubCluster(selectedSubCluster, data)
+        const parentLabel = currentLevel.label
+        autoNameSubClusters(data, parentLabel)
       } else {
         const data = await subCluster(jobId, clusterIndex, {
           num_sub_clusters: subClusterK,
         })
         setSelectedSubClusterIndex(null)
         drillIntoCluster(clusterIndex, data)
+        const parentName = annotation?.name ?? cluster?.name
+        autoNameSubClusters(data, parentName)
       }
     } catch {
       setIsLoadingDrill(false)
@@ -245,6 +282,9 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     setIsLoadingDrill,
     drillIntoCluster,
     drillIntoSubCluster,
+    autoNameSubClusters,
+    annotation,
+    cluster,
   ])
 
   const handleToggleSubClusterExpanded = useCallback((subClusterIndex: number) => {
@@ -390,7 +430,15 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
           className="px-4 py-2 border-b border-gray-200 flex-1 min-h-0 overflow-y-auto"
           data-testid="drawer-subcluster-list"
         >
-          <div className="text-xs font-medium text-gray-500 mb-1.5">Current sub-clusters</div>
+          <div className="flex items-center space-x-2 mb-1.5">
+            <span className="text-xs font-medium text-gray-500">Current sub-clusters</span>
+            {isNamingSubClusters && (
+              <div className="flex items-center space-x-1">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600" />
+                <span className="text-[10px] text-purple-600">Naming...</span>
+              </div>
+            )}
+          </div>
           <div className="space-y-1">
             {subClusters.map((sc) => {
               const scColor = CLUSTER_COLORS[sc.index % CLUSTER_COLORS.length]
@@ -421,7 +469,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
                         style={{ backgroundColor: scColor }}
                       />
                       <span className="text-xs text-gray-900 font-medium">
-                        Sub {sc.index}
+                        {sc.name || `Sub ${sc.index}`}
                       </span>
                       <span className="text-[10px] text-gray-500 shrink-0">
                         {sc.count} pts

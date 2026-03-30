@@ -1,5 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { usePlotStore, CLUSTER_COLORS } from '../../stores/plotStore'
+import { loadAiSettings, nameAiClusters } from '../../api/ai'
+import { updateAnnotation, getAnnotations } from '../../api/plot'
 
 export default function ClusterLegend() {
   const plotData = usePlotStore((state) => state.plotData)
@@ -14,8 +16,14 @@ export default function ClusterLegend() {
   const setSelectedCluster = usePlotStore((state) => state.setSelectedCluster)
   const selectedCluster = usePlotStore((state) => state.selectedCluster)
   const annotations = usePlotStore((state) => state.annotations)
+  const setAnnotations = usePlotStore((state) => state.setAnnotations)
   const drillPath = usePlotStore((state) => state.drillPath)
   const isLoadingDrill = usePlotStore((state) => state.isLoadingDrill)
+  const isNamingClusters = usePlotStore((state) => state.isNamingClusters)
+  const setIsNamingClusters = usePlotStore((state) => state.setIsNamingClusters)
+  const plotJobId = usePlotStore((state) => state.plotJobId)
+
+  const [namingError, setNamingError] = useState<string | null>(null)
 
   const handleClickCluster = useCallback(
     (clusterIndex: number, isSelected: boolean) => {
@@ -23,6 +31,42 @@ export default function ClusterLegend() {
     },
     [setSelectedCluster],
   )
+
+  const handleNameWithAi = useCallback(async () => {
+    if (!plotData || !plotJobId || isNamingClusters) return
+
+    const settings = loadAiSettings()
+    if (!settings.apiKey) {
+      setNamingError('Configure AI settings first (Settings page)')
+      return
+    }
+
+    setIsNamingClusters(true)
+    setNamingError(null)
+
+    try {
+      const clusterIndices = plotData.clusters.map((c) => c.index)
+      const response = await nameAiClusters({
+        job_id: plotJobId,
+        cluster_indices: clusterIndices,
+        api_key: settings.apiKey,
+        model: settings.provider ? `${settings.provider}/${settings.model}` : settings.model,
+        base_url: settings.baseUrl || undefined,
+        temperature: settings.temperature,
+      })
+
+      for (const [indexStr, name] of Object.entries(response.names)) {
+        await updateAnnotation(plotJobId, Number(indexStr), { name })
+      }
+
+      const updated = await getAnnotations(plotJobId)
+      setAnnotations(updated)
+    } catch (err) {
+      setNamingError(err instanceof Error ? err.message : 'AI naming failed')
+    } finally {
+      setIsNamingClusters(false)
+    }
+  }, [plotData, plotJobId, isNamingClusters, setIsNamingClusters, setAnnotations])
 
   if (!plotData) return null
 
@@ -56,12 +100,33 @@ export default function ClusterLegend() {
             Show All
           </button>
         ) : (
-          <button
-            onClick={handleShowAll}
-            className="text-xs text-blue-600 hover:text-blue-800"
-          >
-            Show All
-          </button>
+          <>
+            <button
+              onClick={handleShowAll}
+              className="text-xs text-blue-600 hover:text-blue-800"
+            >
+              Show All
+            </button>
+            <button
+              onClick={handleNameWithAi}
+              disabled={isNamingClusters || !plotJobId}
+              className="text-xs text-purple-600 hover:text-purple-800 disabled:opacity-50 flex items-center space-x-1"
+              title="Name clusters using AI (configure in Settings)"
+              data-testid="name-with-ai-button"
+            >
+              {isNamingClusters ? (
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74z" />
+                </svg>
+              )}
+              <span>Name with AI</span>
+            </button>
+            {namingError && (
+              <span className="text-xs text-red-500">{namingError}</span>
+            )}
+          </>
         )}
         {isLoadingDrill && (
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
@@ -118,7 +183,7 @@ export default function ClusterLegend() {
                     />
                     <div className="text-xs text-left">
                       <div className={`font-medium ${isVisible ? 'text-gray-900' : 'text-gray-500 line-through'}`}>
-                        Sub {sc.index}
+                        {sc.name || `Sub ${sc.index}`}
                       </div>
                       <div className="text-gray-500 text-[10px]">
                         {sc.count} points
