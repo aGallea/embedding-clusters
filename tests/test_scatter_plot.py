@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -50,10 +51,9 @@ class TestCreateCollectionTextDisplay:
 
 
 class TestGenerateClusterProps:
-    def test_without_gpt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_without_gpt(self) -> None:
         from embedding_cluster.scatter_plot import generate_cluster_props
 
-        settings = Settings()
         pred_arr = [0, 0, 1, 1, 2]
         text_display = ["a", "b", "c", "d", "e"]
 
@@ -61,7 +61,6 @@ class TestGenerateClusterProps:
             num_clusters=3,
             pred_arr=pred_arr,
             collection_content_text_display=text_display,
-            settings=settings,
         )
 
         assert len(clusters_indices) == 3
@@ -70,83 +69,6 @@ class TestGenerateClusterProps:
         assert clusters_indices[1] == [2, 3]
         assert clusters_indices[2] == [4]
         assert cluster_names == ["Group 1", "Group 2", "Group 3"]
-
-    def test_with_gpt(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from embedding_cluster.scatter_plot import generate_cluster_props
-
-        monkeypatch.setenv("GPT_GENERATE_CLUSTER_NAME", "true")
-        settings = Settings()
-        pred_arr = [0, 0]
-        text_display = ["item1", "item2"]
-
-        with patch(
-            "embedding_cluster.scatter_plot.gpt_get_cluster_name",
-            return_value="Cool Group",
-        ):
-            _clusters_indices, cluster_names = generate_cluster_props(
-                num_clusters=1,
-                pred_arr=pred_arr,
-                collection_content_text_display=text_display,
-                settings=settings,
-            )
-
-        assert cluster_names == ["Cool Group"]
-
-
-class TestGptGetClusterName:
-    def test_gpt_get_cluster_name(self) -> None:
-        from embedding_cluster.scatter_plot import gpt_get_cluster_name
-
-        settings = Settings()
-
-        with patch("embedding_cluster.scatter_plot.OpenAI") as mock_openai_cls:
-            mock_client = MagicMock()
-            mock_openai_cls.return_value = mock_client
-            mock_completion = MagicMock()
-            mock_choice = MagicMock()
-            mock_choice.message.content = "Fashion Items"
-            mock_completion.choices = [mock_choice]
-            mock_client.chat.completions.create.return_value = mock_completion
-
-            result = gpt_get_cluster_name("item1\nitem2", settings)
-
-        assert result == "Fashion Items"
-
-    def test_gpt_truncates_long_name(self) -> None:
-        from embedding_cluster.scatter_plot import gpt_get_cluster_name
-
-        settings = Settings()
-
-        with patch("embedding_cluster.scatter_plot.OpenAI") as mock_openai_cls:
-            mock_client = MagicMock()
-            mock_openai_cls.return_value = mock_client
-            mock_completion = MagicMock()
-            mock_choice = MagicMock()
-            mock_choice.message.content = "A" * 50
-            mock_completion.choices = [mock_choice]
-            mock_client.chat.completions.create.return_value = mock_completion
-
-            result = gpt_get_cluster_name("info", settings)
-
-        assert len(result) == 32  # 30 chars + ".."
-
-    def test_gpt_none_content(self) -> None:
-        from embedding_cluster.scatter_plot import gpt_get_cluster_name
-
-        settings = Settings()
-
-        with patch("embedding_cluster.scatter_plot.OpenAI") as mock_openai_cls:
-            mock_client = MagicMock()
-            mock_openai_cls.return_value = mock_client
-            mock_completion = MagicMock()
-            mock_choice = MagicMock()
-            mock_choice.message.content = None
-            mock_completion.choices = [mock_choice]
-            mock_client.chat.completions.create.return_value = mock_completion
-
-            result = gpt_get_cluster_name("info", settings)
-
-        assert result == ""
 
 
 class TestLoadChromadbCollection:
@@ -690,8 +612,8 @@ class TestComputePlotDataInternalFields:
         endpoint to return items from the wrong cluster.
         """
         result = self._run_compute(self._make_settings(), n_points=6)
-        points = result["points"]
-        labels = result["cluster_labels"]
+        points = cast("list[dict[str, object]]", result["points"])
+        labels = cast("list[int]", result["cluster_labels"])
         assert len(points) == len(labels)
         for i, (point, label) in enumerate(zip(points, labels, strict=True)):
             assert point["cluster"] == label, (
@@ -706,7 +628,7 @@ class TestComputePlotDataInternalFields:
         index-based lookup in cluster-detail and sub-cluster endpoints.
         """
         result = self._run_compute(self._make_settings(), n_points=6)
-        points = result["points"]
+        points = cast("list[dict[str, object]]", result["points"])
         expected_ids = [str(i) for i in range(6)]
         actual_ids = [p["id"] for p in points]
         assert actual_ids == expected_ids

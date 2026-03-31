@@ -75,11 +75,3 @@ class Settings(BaseSettings):
     umap_n_neighbors: int = Field(default=15, description="UMAP number of neighbors")
     umap_min_dist: float = Field(default=0.1, description="UMAP minimum distance")
     umap_metric: str = Field(default="cosine", description="UMAP distance metric")
-
-    gpt_generate_cluster_name: bool = Field(
-        default=False, description="Generate cluster names using GPT"
-    )
-    gpt_default_model: str = Field(default="gpt-3.5-turbo", description="GPT model name")
-    gpt_default_temperature: float = Field(
-        default=0.51, description="GPT model temperature"
-    )

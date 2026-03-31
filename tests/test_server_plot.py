@@ -241,9 +241,6 @@ async def test_compute_with_all_fields(app: FastAPI, mock_compute: None) -> None
                 "num_clusters": 5,
                 "text_display_fields": ["name", "description"],
                 "image_field": "imageUrl",
-                "gpt_generate_cluster_name": True,
-                "gpt_default_model": "gpt-4",
-                "gpt_default_temperature": 0.7,
             },
         )
 

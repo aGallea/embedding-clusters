@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from embedding_cluster.server.routes.ai import router as ai_router
 from embedding_cluster.server.routes.annotations import (
     router as annotations_router,
 )
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     async def health_check() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.include_router(ai_router)
     app.include_router(collections_router)
     app.include_router(csv_router)
     app.include_router(index_router)

@@ -70,9 +70,6 @@ class PlotRequest(BaseModel):
     num_clusters: int = 10
     text_display_fields: list[str] | None = None
     image_field: str | None = None
-    gpt_generate_cluster_name: bool = False
-    gpt_default_model: str = "gpt-3.5-turbo"
-    gpt_default_temperature: float = 0.51
     reduction_algorithm: Literal["tsne", "umap", "pca"] = "tsne"
     tsne_perplexity: float = 30.0
     tsne_learning_rate: str = "auto"
@@ -199,6 +196,7 @@ class SubClusterInfo(BaseModel):
     index: int
     count: int
     color: str
+    name: str | None = None
 
 
 class SubClusterResponse(BaseModel):
@@ -248,3 +246,38 @@ class ClusterAnnotation(BaseModel):
 class AnnotationsResponse(BaseModel):
     job_id: str
     clusters: dict[str, ClusterAnnotation]
+
+
+class AiNamingRequest(BaseModel):
+    job_id: str
+    cluster_indices: list[int]
+    api_key: str
+    model: str
+    base_url: str | None = None
+    temperature: float = 0.5
+
+
+class AiNamingResponse(BaseModel):
+    names: dict[str, str]
+
+
+class AiSubClusterNamingRequest(BaseModel):
+    job_id: str
+    point_ids: list[str]
+    sub_cluster_labels: list[int]
+    api_key: str
+    model: str
+    base_url: str | None = None
+    temperature: float = 0.5
+    parent_cluster_name: str | None = None
+
+
+class AiTestConnectionRequest(BaseModel):
+    api_key: str
+    model: str
+    base_url: str | None = None
+
+
+class AiTestConnectionResponse(BaseModel):
+    success: bool
+    error: str | None = None

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import HomePage from './pages/HomePage'
 import IndexPage from './pages/IndexPage'
 import PlotPage from './pages/PlotPage'
+import SettingsPage from './pages/SettingsPage'
 import { usePlotStore } from './stores/plotStore'
 
 const queryClient = new QueryClient()
@@ -34,6 +35,9 @@ function NavBar() {
               </NavLink>
               <NavLink to="/plot" className={linkClass}>
                 Plot
+              </NavLink>
+              <NavLink to="/settings" className={linkClass}>
+                Settings
               </NavLink>
             </div>
           </div>
@@ -86,6 +90,7 @@ export default function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/index" element={<IndexPage />} />
               <Route path="/plot" element={<PlotPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>
         </div>
