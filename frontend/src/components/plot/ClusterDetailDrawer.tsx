@@ -109,7 +109,7 @@ export default function ClusterDetailDrawer({ jobId, imageField }: ClusterDetail
     parentName: string | undefined,
   ) => {
     const settings = loadAiSettings()
-    if (!settings.apiKey || !jobId) return
+    if ((!settings.apiKey && settings.provider !== 'ollama') || !jobId) return
 
     setIsNamingSubClusters(true)
     try {

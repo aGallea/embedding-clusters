@@ -316,7 +316,6 @@ export default function PlotControls({ onCompute, isComputing }: PlotControlsPro
           {/* Rendering (Render Mode + Point Size) */}
           <CollapsibleSection title="Rendering" defaultOpen={false}>
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Render Mode</label>
               <div className="flex space-x-2">
                 {(['particles', 'sprites', 'spheres'] as const).map((mode) => (
                   <label key={mode} className="flex items-center text-xs cursor-pointer">

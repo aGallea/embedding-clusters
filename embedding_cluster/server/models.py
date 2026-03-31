@@ -281,3 +281,18 @@ class AiTestConnectionRequest(BaseModel):
 class AiTestConnectionResponse(BaseModel):
     success: bool
     error: str | None = None
+
+
+class OllamaModelsRequest(BaseModel):
+    base_url: str = "http://localhost:11434"
+
+
+class OllamaModel(BaseModel):
+    name: str
+    size: int | None = None
+    parameter_size: str | None = None
+    family: str | None = None
+
+
+class OllamaModelsResponse(BaseModel):
+    models: list[OllamaModel]
