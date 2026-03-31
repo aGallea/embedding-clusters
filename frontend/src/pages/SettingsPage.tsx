@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
+import type { StoredAiSettings } from '../api/ai';
 import {
   loadAiSettings,
   saveAiSettings,
   testAiConnection,
-  StoredAiSettings,
   DEFAULT_AI_SETTINGS,
 } from '../api/ai';
 
