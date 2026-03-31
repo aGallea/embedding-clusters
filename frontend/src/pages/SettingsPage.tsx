@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import type { StoredAiSettings } from '../api/ai';
+import type { AiProvider, StoredAiSettings } from '../api/ai';
 import {
+  AI_PROVIDERS,
   loadAiSettings,
   saveAiSettings,
   testAiConnection,
+  fetchOllamaModels,
   DEFAULT_AI_SETTINGS,
 } from '../api/ai';
+import type { OllamaModel } from '../types';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<StoredAiSettings>(DEFAULT_AI_SETTINGS);
@@ -13,15 +16,57 @@ export default function SettingsPage() {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
+  const [ollamaModelsLoading, setOllamaModelsLoading] = useState(false);
+  const [ollamaModelsError, setOllamaModelsError] = useState('');
 
   useEffect(() => {
-    setSettings(loadAiSettings());
+    const loaded = loadAiSettings();
+    setSettings(loaded);
+    if (loaded.provider === 'ollama') {
+      void loadOllamaModels(loaded.baseUrl || 'http://localhost:11434');
+    }
   }, []);
+
+  const loadOllamaModels = async (baseUrl: string) => {
+    setOllamaModelsLoading(true);
+    setOllamaModelsError('');
+    try {
+      const response = await fetchOllamaModels(baseUrl);
+      setOllamaModels(response.models);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to fetch models';
+      setOllamaModelsError(msg);
+      setOllamaModels([]);
+    } finally {
+      setOllamaModelsLoading(false);
+    }
+  };
 
   const handleChange = (field: keyof StoredAiSettings, value: string | number) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
     setIsSaved(false);
     setTestStatus('idle');
+  };
+
+  const handleProviderChange = (provider: AiProvider) => {
+    const providerConfig = AI_PROVIDERS.find((p) => p.value === provider);
+    const newBaseUrl = providerConfig?.defaultBaseUrl ?? '';
+    setSettings((prev) => ({
+      ...prev,
+      provider,
+      baseUrl: newBaseUrl,
+      model: provider === prev.provider ? prev.model : '',
+    }));
+    setIsSaved(false);
+    setTestStatus('idle');
+
+    if (provider === 'ollama') {
+      void loadOllamaModels(newBaseUrl || 'http://localhost:11434');
+    } else {
+      setOllamaModels([]);
+      setOllamaModelsError('');
+    }
   };
 
   const handleSave = () => {
@@ -69,26 +114,51 @@ export default function SettingsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Provider
             </label>
-            <input
-              type="text"
+            <select
               value={settings.provider}
-              onChange={(e) => handleChange('provider', e.target.value)}
-              className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              placeholder="e.g. openai"
-            />
+              onChange={(e) => handleProviderChange(e.target.value as AiProvider)}
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border bg-white"
+            >
+              {AI_PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Model
             </label>
-            <input
-              type="text"
-              value={settings.model}
-              onChange={(e) => handleChange('model', e.target.value)}
-              className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-              placeholder="e.g. gpt-4o-mini"
-            />
+            {settings.provider === 'ollama' && ollamaModels.length > 0 ? (
+              <select
+                value={settings.model}
+                onChange={(e) => handleChange('model', e.target.value)}
+                className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border bg-white"
+              >
+                <option value="">Select a model...</option>
+                {ollamaModels.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}{m.parameter_size ? ` (${m.parameter_size})` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={settings.model}
+                onChange={(e) => handleChange('model', e.target.value)}
+                className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                placeholder="e.g. gpt-4o-mini"
+              />
+            )}
+            {settings.provider === 'ollama' && ollamaModelsLoading && (
+              <p className="mt-1 text-sm text-gray-500">Loading models...</p>
+            )}
+            {settings.provider === 'ollama' && ollamaModelsError && (
+              <p className="mt-1 text-sm text-red-500">{ollamaModelsError}</p>
+            )}
           </div>
 
           <div>
@@ -146,7 +216,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => { void handleTestConnection(); }}
-                disabled={testStatus === 'testing' || !settings.apiKey}
+                disabled={testStatus === 'testing' || (!settings.apiKey && settings.provider !== 'ollama')}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {testStatus === 'testing' ? (

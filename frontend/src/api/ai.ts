@@ -4,13 +4,23 @@ import type {
   AiSubClusterNamingRequest,
   AiTestConnectionRequest,
   AiTestConnectionResponse,
+  OllamaModelsResponse,
 } from "../types";
 import { apiPost } from "./client";
 
 const AI_SETTINGS_KEY = "ai-cluster-naming-settings";
 
+export const AI_PROVIDERS = [
+  { value: "openai", label: "OpenAI", defaultBaseUrl: "" },
+  { value: "google", label: "Google", defaultBaseUrl: "" },
+  { value: "anthropic", label: "Anthropic", defaultBaseUrl: "" },
+  { value: "ollama", label: "Ollama", defaultBaseUrl: "http://localhost:11434" },
+] as const;
+
+export type AiProvider = (typeof AI_PROVIDERS)[number]["value"];
+
 export interface StoredAiSettings {
-  provider: string;
+  provider: AiProvider;
   model: string;
   apiKey: string;
   baseUrl: string;
@@ -55,4 +65,12 @@ export async function nameAiSubClusters(
   request: AiSubClusterNamingRequest,
 ): Promise<AiNamingResponse> {
   return apiPost<AiNamingResponse>("/ai/name-sub-clusters", request);
+}
+
+export async function fetchOllamaModels(
+  baseUrl: string = "http://localhost:11434",
+): Promise<OllamaModelsResponse> {
+  return apiPost<OllamaModelsResponse>("/ai/ollama/models", {
+    base_url: baseUrl,
+  });
 }

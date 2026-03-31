@@ -36,7 +36,7 @@ export default function ClusterLegend() {
     if (!plotData || !plotJobId || isNamingClusters) return
 
     const settings = loadAiSettings()
-    if (!settings.apiKey) {
+    if (!settings.apiKey && settings.provider !== 'ollama') {
       setNamingError('Configure AI settings first (Settings page)')
       return
     }

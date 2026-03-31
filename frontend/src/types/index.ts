@@ -277,3 +277,14 @@ export interface AiTestConnectionResponse {
   success: boolean;
   error: string | null;
 }
+
+export interface OllamaModel {
+  name: string;
+  size: number | null;
+  parameter_size: string | null;
+  family: string | null;
+}
+
+export interface OllamaModelsResponse {
+  models: OllamaModel[];
+}

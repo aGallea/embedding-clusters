@@ -25,6 +25,15 @@ SYSTEM_PROMPT_SUB_CLUSTER = (
 )
 
 
+def _normalize_base_url(model: str, base_url: str | None) -> str | None:
+    """Strip /v1 suffix for Ollama models (litellm uses native API)."""
+    if base_url and model.startswith("ollama/"):
+        stripped = base_url.rstrip("/")
+        if stripped.endswith("/v1"):
+            return stripped[:-3]
+    return base_url
+
+
 def _call_llm(
     messages: list[dict[str, str]],
     api_key: str,
@@ -36,11 +45,13 @@ def _call_llm(
     kwargs: dict[str, object] = {
         "model": model,
         "messages": messages,
-        "api_key": api_key,
         "temperature": temperature,
     }
-    if base_url:
-        kwargs["api_base"] = base_url
+    if api_key:
+        kwargs["api_key"] = api_key
+    resolved_url = _normalize_base_url(model, base_url)
+    if resolved_url:
+        kwargs["api_base"] = resolved_url
 
     response = litellm_completion(**kwargs)
     content: str = response.choices[0].message.content or ""
@@ -97,11 +108,13 @@ def test_connection(
         kwargs: dict[str, object] = {
             "model": model,
             "messages": [{"role": "user", "content": "Say hello"}],
-            "api_key": api_key,
             "max_tokens": 5,
         }
-        if base_url:
-            kwargs["api_base"] = base_url
+        if api_key:
+            kwargs["api_key"] = api_key
+        resolved_url = _normalize_base_url(model, base_url)
+        if resolved_url:
+            kwargs["api_base"] = resolved_url
         litellm_completion(**kwargs)
         return True, None
     except Exception as exc:
