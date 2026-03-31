@@ -2,19 +2,67 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from embedding_cluster.ai_naming import (
+    _normalize_base_url,
+    get_cluster_name,
+    get_sub_cluster_name,
+)
+from embedding_cluster.ai_naming import (
+    test_connection as ai_test_connection,
+)
+
+
+def _mock_llm_response(content: str | None = "Name") -> MagicMock:
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = content
+    mock_response.choices = [mock_choice]
+    return mock_response
+
+
+class TestNormalizeBaseUrl:
+    def test_strips_v1_for_ollama_model(self) -> None:
+        result = _normalize_base_url(
+            "ollama/qwen3:4b",
+            "http://localhost:11434/v1",
+        )
+        assert result == "http://localhost:11434"
+
+    def test_strips_v1_with_trailing_slash(self) -> None:
+        result = _normalize_base_url(
+            "ollama/llama3",
+            "http://localhost:11434/v1/",
+        )
+        assert result == "http://localhost:11434"
+
+    def test_no_strip_without_v1_suffix(self) -> None:
+        result = _normalize_base_url(
+            "ollama/llama3",
+            "http://localhost:11434",
+        )
+        assert result == "http://localhost:11434"
+
+    def test_no_strip_for_non_ollama_model(self) -> None:
+        result = _normalize_base_url(
+            "gpt-4o-mini",
+            "http://localhost:11434/v1",
+        )
+        assert result == "http://localhost:11434/v1"
+
+    def test_returns_none_when_base_url_is_none(self) -> None:
+        result = _normalize_base_url("ollama/llama3", None)
+        assert result is None
+
+    def test_returns_empty_string_when_base_url_empty(self) -> None:
+        result = _normalize_base_url("ollama/llama3", "")
+        assert result == ""
+
 
 class TestGetClusterName:
     def test_returns_short_name(self) -> None:
-        from embedding_cluster.ai_naming import get_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "Athletic Footwear"
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response("Athletic Footwear"),
         ):
             result = get_cluster_name(
                 item_names=["Running Shoes", "Basketball Sneakers"],
@@ -25,16 +73,9 @@ class TestGetClusterName:
         assert result == "Athletic Footwear"
 
     def test_truncates_long_name(self) -> None:
-        from embedding_cluster.ai_naming import get_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "A" * 50
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response("A" * 50),
         ):
             result = get_cluster_name(
                 item_names=["item1"],
@@ -45,16 +86,9 @@ class TestGetClusterName:
         assert len(result) == 32  # 30 chars + ".."
 
     def test_none_content_returns_empty(self) -> None:
-        from embedding_cluster.ai_naming import get_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = None
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response(None),
         ):
             result = get_cluster_name(
                 item_names=["item1"],
@@ -65,16 +99,9 @@ class TestGetClusterName:
         assert result == ""
 
     def test_passes_base_url(self) -> None:
-        from embedding_cluster.ai_naming import get_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "Name"
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response(),
         ) as mock_completion:
             get_cluster_name(
                 item_names=["item1"],
@@ -88,16 +115,9 @@ class TestGetClusterName:
         assert call_kwargs["api_base"] == "http://localhost:11434"
 
     def test_passes_temperature(self) -> None:
-        from embedding_cluster.ai_naming import get_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "Name"
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response(),
         ) as mock_completion:
             get_cluster_name(
                 item_names=["item1"],
@@ -110,19 +130,42 @@ class TestGetClusterName:
         call_kwargs = mock_completion.call_args[1]
         assert call_kwargs["temperature"] == 0.7
 
+    def test_empty_api_key_not_passed_to_litellm(self) -> None:
+        with patch(
+            "embedding_cluster.ai_naming.litellm_completion",
+            return_value=_mock_llm_response(),
+        ) as mock_completion:
+            get_cluster_name(
+                item_names=["item1"],
+                api_key="",
+                model="ollama/llama3",
+                base_url="http://localhost:11434",
+            )
+
+        call_kwargs = mock_completion.call_args[1]
+        assert "api_key" not in call_kwargs
+
+    def test_ollama_base_url_v1_stripped(self) -> None:
+        with patch(
+            "embedding_cluster.ai_naming.litellm_completion",
+            return_value=_mock_llm_response(),
+        ) as mock_completion:
+            get_cluster_name(
+                item_names=["item1"],
+                api_key="",
+                model="ollama/llama3",
+                base_url="http://localhost:11434/v1",
+            )
+
+        call_kwargs = mock_completion.call_args[1]
+        assert call_kwargs["api_base"] == "http://localhost:11434"
+
 
 class TestGetSubClusterName:
     def test_includes_parent_context(self) -> None:
-        from embedding_cluster.ai_naming import get_sub_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "Running Shoes"
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response("Running Shoes"),
         ) as mock_completion:
             result = get_sub_cluster_name(
                 item_names=["Nike Air Max", "Adidas Ultraboost"],
@@ -137,16 +180,9 @@ class TestGetSubClusterName:
         assert "Athletic Footwear" in system_msg
 
     def test_without_parent_name_uses_default_prompt(self) -> None:
-        from embedding_cluster.ai_naming import get_sub_cluster_name
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "Sub Name"
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response("Sub Name"),
         ) as mock_completion:
             result = get_sub_cluster_name(
                 item_names=["item1"],
@@ -162,18 +198,11 @@ class TestGetSubClusterName:
 
 class TestTestConnection:
     def test_success(self) -> None:
-        from embedding_cluster.ai_naming import test_connection
-
-        mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_choice.message.content = "Hello"
-        mock_response.choices = [mock_choice]
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
-            return_value=mock_response,
+            return_value=_mock_llm_response("Hello"),
         ):
-            success, error = test_connection(
+            success, error = ai_test_connection(
                 api_key="test-key",
                 model="gpt-4o-mini",
             )
@@ -182,13 +211,11 @@ class TestTestConnection:
         assert error is None
 
     def test_failure_redacts_key(self) -> None:
-        from embedding_cluster.ai_naming import test_connection
-
         with patch(
             "embedding_cluster.ai_naming.litellm_completion",
             side_effect=Exception("Invalid API key: sk-1234567890abcdef"),
         ):
-            success, error = test_connection(
+            success, error = ai_test_connection(
                 api_key="sk-1234567890abcdef",
                 model="gpt-4o-mini",
             )
@@ -196,3 +223,31 @@ class TestTestConnection:
         assert success is False
         assert error is not None
         assert "sk-1234567890abcdef" not in error
+
+    def test_empty_api_key_not_passed_to_litellm(self) -> None:
+        with patch(
+            "embedding_cluster.ai_naming.litellm_completion",
+            return_value=_mock_llm_response("Hello"),
+        ) as mock_completion:
+            ai_test_connection(
+                api_key="",
+                model="ollama/llama3",
+                base_url="http://localhost:11434",
+            )
+
+        call_kwargs = mock_completion.call_args[1]
+        assert "api_key" not in call_kwargs
+
+    def test_ollama_base_url_v1_stripped(self) -> None:
+        with patch(
+            "embedding_cluster.ai_naming.litellm_completion",
+            return_value=_mock_llm_response("Hello"),
+        ) as mock_completion:
+            ai_test_connection(
+                api_key="",
+                model="ollama/llama3",
+                base_url="http://localhost:11434/v1",
+            )
+
+        call_kwargs = mock_completion.call_args[1]
+        assert call_kwargs["api_base"] == "http://localhost:11434"

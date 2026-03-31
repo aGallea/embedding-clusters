@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import status
 from httpx import ASGITransport, AsyncClient
@@ -349,3 +350,230 @@ class TestTestConnection:
             )
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+class TestOllamaModels:
+    @pytest.mark.asyncio
+    async def test_lists_models_successfully(
+        self,
+        app: FastAPI,
+    ) -> None:
+        ollama_response = httpx.Response(
+            200,
+            json={
+                "models": [
+                    {
+                        "name": "llama3:latest",
+                        "size": 4000000000,
+                        "details": {
+                            "parameter_size": "8B",
+                            "family": "llama",
+                        },
+                    },
+                    {
+                        "name": "qwen3:4b",
+                        "size": 2500000000,
+                        "details": {
+                            "parameter_size": "4B",
+                            "family": "qwen3",
+                        },
+                    },
+                ],
+            },
+            request=httpx.Request("GET", "http://localhost:11434/api/tags"),
+        )
+        with patch(
+            "embedding_cluster.server.routes.ai.httpx.AsyncClient",
+        ) as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__aenter__ = lambda s: _async_return(s)
+            mock_client.__aexit__ = lambda s, *a: _async_return(None)
+            mock_client.get = lambda *a, **kw: _async_return(
+                ollama_response,
+            )
+            mock_client_cls.return_value = mock_client
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/ai/ollama/models",
+                    json={"base_url": "http://localhost:11434"},
+                )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = cast("dict[str, object]", response.json())
+        models = cast("list[dict[str, object]]", data["models"])
+        assert len(models) == 2
+        assert models[0]["name"] == "llama3:latest"
+        assert models[0]["parameter_size"] == "8B"
+        assert models[0]["family"] == "llama"
+        assert models[1]["name"] == "qwen3:4b"
+
+    @pytest.mark.asyncio
+    async def test_strips_v1_from_base_url(
+        self,
+        app: FastAPI,
+    ) -> None:
+        ollama_response = httpx.Response(
+            200,
+            json={"models": []},
+            request=httpx.Request("GET", "http://localhost:11434/api/tags"),
+        )
+        captured_urls: list[str] = []
+
+        async def capture_get(url: str, **kwargs: object) -> httpx.Response:
+            captured_urls.append(url)
+            return ollama_response
+
+        with patch(
+            "embedding_cluster.server.routes.ai.httpx.AsyncClient",
+        ) as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__aenter__ = lambda s: _async_return(s)
+            mock_client.__aexit__ = lambda s, *a: _async_return(None)
+            mock_client.get = capture_get
+            mock_client_cls.return_value = mock_client
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                await client.post(
+                    "/api/ai/ollama/models",
+                    json={"base_url": "http://localhost:11434/v1"},
+                )
+
+        assert captured_urls[0] == "http://localhost:11434/api/tags"
+
+    @pytest.mark.asyncio
+    async def test_connect_error_returns_502(
+        self,
+        app: FastAPI,
+    ) -> None:
+        with patch(
+            "embedding_cluster.server.routes.ai.httpx.AsyncClient",
+        ) as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__aenter__ = lambda s: _async_return(s)
+            mock_client.__aexit__ = lambda s, *a: _async_return(None)
+            mock_client.get = _raise_connect_error
+            mock_client_cls.return_value = mock_client
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/ai/ollama/models",
+                    json={"base_url": "http://localhost:11434"},
+                )
+
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert "Cannot connect" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_504(
+        self,
+        app: FastAPI,
+    ) -> None:
+        with patch(
+            "embedding_cluster.server.routes.ai.httpx.AsyncClient",
+        ) as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__aenter__ = lambda s: _async_return(s)
+            mock_client.__aexit__ = lambda s, *a: _async_return(None)
+            mock_client.get = _raise_timeout
+            mock_client_cls.return_value = mock_client
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/ai/ollama/models",
+                    json={"base_url": "http://localhost:11434"},
+                )
+
+        assert response.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+        assert "timed out" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_http_error_returns_502(
+        self,
+        app: FastAPI,
+    ) -> None:
+        error_response = httpx.Response(500, request=httpx.Request("GET", "http://test"))
+
+        async def raise_http_error(*args: object, **kwargs: object) -> None:
+            raise httpx.HTTPStatusError(
+                "Server Error",
+                request=error_response.request,
+                response=error_response,
+            )
+
+        with patch(
+            "embedding_cluster.server.routes.ai.httpx.AsyncClient",
+        ) as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__aenter__ = lambda s: _async_return(s)
+            mock_client.__aexit__ = lambda s, *a: _async_return(None)
+            mock_client.get = raise_http_error
+            mock_client_cls.return_value = mock_client
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/ai/ollama/models",
+                    json={"base_url": "http://localhost:11434"},
+                )
+
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert "500" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_default_base_url(
+        self,
+        app: FastAPI,
+    ) -> None:
+        ollama_response = httpx.Response(
+            200,
+            json={"models": []},
+            request=httpx.Request("GET", "http://localhost:11434/api/tags"),
+        )
+        with patch(
+            "embedding_cluster.server.routes.ai.httpx.AsyncClient",
+        ) as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.__aenter__ = lambda s: _async_return(s)
+            mock_client.__aexit__ = lambda s, *a: _async_return(None)
+            mock_client.get = lambda *a, **kw: _async_return(
+                ollama_response,
+            )
+            mock_client_cls.return_value = mock_client
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/ai/ollama/models",
+                    json={},
+                )
+
+        assert response.status_code == status.HTTP_200_OK
+
+
+async def _async_return(value: object) -> object:
+    return value
+
+
+async def _raise_connect_error(*args: object, **kwargs: object) -> None:
+    raise httpx.ConnectError("Connection refused")
+
+
+async def _raise_timeout(*args: object, **kwargs: object) -> None:
+    raise httpx.ReadTimeout("Read timed out")
