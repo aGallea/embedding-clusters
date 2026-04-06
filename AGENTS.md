@@ -64,8 +64,8 @@ uv run pytest
 # Run with coverage report
 uv run pytest --cov=embedding_cluster --cov-report=term-missing
 
-# Run with coverage enforcement (70% minimum)
-uv run pytest --cov=embedding_cluster --cov-report=term-missing --cov-fail-under=70
+# Run with coverage enforcement (90% minimum, matches CI)
+uv run pytest --cov=embedding_cluster --cov-report=term-missing --cov-fail-under=90
 
 # Run a single test file
 uv run pytest tests/test_settings.py -v
@@ -110,7 +110,7 @@ E2E tests require pre-indexed ChromaDB data. The `webServer` config in
 GitHub Actions workflow in `.github/workflows/ci.yml` runs on push/PR:
 - **lint** job: `ruff check` + `ruff format --check`
 - **typecheck** job: `mypy embedding_cluster/`
-- **test** job: `pytest --cov --cov-fail-under=70`
+- **test** job: `pytest --cov` (90% minimum enforced by coverage report)
 
 All jobs use `uv sync --all-extras` for dependency installation.
 
@@ -172,16 +172,35 @@ embedding_cluster/
   settings.py          # Pydantic Settings (env var config)
   utils.py             # Shared utilities (logging, ChromaDB helpers, image downloader)
   indexer.py           # INDEX mode: CSV parsing, embedding generation, ChromaDB storage
-  scatter_plot.py      # PLOT mode: Clustering, t-SNE, Dash visualization
+  scatter_plot.py      # PLOT mode: Clustering, dimensionality reduction, visualization data
+  ai_naming.py         # LLM-powered cluster naming via LiteLLM
+  annotations.py       # Cluster annotation persistence (JSON sidecar files)
   csv/                 # Sample data files
+  server/
+    app.py             # FastAPI app factory, SPA serving
+    models.py          # Pydantic request/response models
+    tasks.py           # Background task registry
+    ws.py              # WebSocket manager for live progress
+    routes/
+      ai.py            # AI cluster naming endpoints
+      annotations.py   # Cluster annotation CRUD
+      collections.py   # ChromaDB collection management
+      csv.py           # CSV upload and preview
+      index.py         # Indexing jobs with WebSocket progress
+      plot.py          # Plot computation, cluster detail, sub-clustering
+      search.py        # Semantic search (text and image)
+frontend/
+  src/
+    App.tsx            # Router, QueryClient, Zustand provider
+    api/               # Typed API client layer
+    components/        # UI components organized by page
+    hooks/             # useIndexWebSocket, usePlotData
+    pages/             # HomePage, IndexPage, PlotPage, SettingsPage
+    stores/            # Zustand plotStore (plot state management)
+    types/             # TypeScript interfaces mirroring backend models
 tests/
-  __init__.py
   conftest.py          # Shared fixtures
-  test_settings.py     # Settings env var parsing tests
-  test_utils.py        # Utilities, Singleton, ImageDownloader tests
-  test_indexer.py      # Indexer pipeline tests (mocked ML models)
-  test_scatter_plot.py # Scatter plot tests (mocked data)
-  test_main.py         # Entry point dispatch tests
+  test_*.py            # Unit tests for each backend module and route
 ```
 
 ### Key Dependencies
@@ -191,10 +210,10 @@ Runtime:
 - `chromadb` - Vector database for embedding storage
 - `transformers` / `sentence-transformers` - Text and image embedding models
 - `torch` - ML framework backend
-- `dash` / `plotly` - Interactive 3D visualization
-- `scikit-learn` - KMeans clustering and t-SNE
+- `fastapi` / `uvicorn` - Web server and REST API
+- `scikit-learn` - KMeans clustering and dimensionality reduction
 - `aiohttp` - Async HTTP for image downloads
-- `openai` - Optional GPT-based cluster naming
+- `litellm` - Multi-provider LLM integration for cluster naming
 - `numpy` / `Pillow` - Numerical and image processing
 
 Dev:
@@ -202,6 +221,7 @@ Dev:
 - `mypy` - Static type checking
 - `ruff` - Linting and formatting
 - `pre-commit` - Git hook management
+- `httpx` - Test client for FastAPI routes
 
 ## Git & Commit Conventions
 
@@ -231,9 +251,15 @@ Extensive pre-commit setup. Key hooks:
 
 ## Data Flow
 
-1. **INDEX mode**: CSV -> parse rows -> generate embeddings (CLIP for images,
-   SentenceTransformer for text) -> store in ChromaDB collections
-2. **PLOT mode**: ChromaDB collection -> StandardScaler -> KMeans clustering ->
-   t-SNE 3D projection -> Dash/Plotly interactive scatter plot
+1. **INDEX mode**: CSV → parse rows → generate embeddings (CLIP for images,
+   SentenceTransformer for text) → store in ChromaDB collections
+2. **PLOT mode**: ChromaDB collection → StandardScaler → KMeans clustering →
+   dimensionality reduction (t-SNE/UMAP/PCA) → 3D point data via REST API
+3. **SERVER mode**: FastAPI serves REST API + built React SPA. Long-running
+   jobs (indexing, plot computation) use a task registry with WebSocket
+   progress streaming.
 
-ChromaDB data is persisted to `./chromadb/` directory (gitignored).
+Persistent data:
+- `./chromadb/` — Vector database (gitignored)
+- `./uploads/` — Uploaded CSV files (gitignored)
+- `./annotations/` — Cluster annotations as JSON sidecar files (gitignored)
