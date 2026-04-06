@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python + React application for generating, indexing, and visualizing embedding clusters from CSV data. Uses CLIP/SentenceTransformer for embeddings, ChromaDB for vector storage, k-means for clustering, and a React/Three.js frontend for 3D visualization.
+Python + React application for generating, indexing, and visualizing
+embedding clusters from CSV data. Uses CLIP/SentenceTransformer for
+embeddings, ChromaDB for vector storage, k-means for clustering, and a
+React/Three.js frontend for 3D visualization.
 
 - **Python 3.13**, managed with [uv](https://docs.astral.sh/uv/)
 - **Package name**: `embedding_cluster` (underscore, not hyphen)
@@ -46,6 +49,7 @@ E2E tests require pre-indexed ChromaDB data and a built frontend. The Playwright
 ### Three Running Modes
 
 All controlled by `RUNNING_MODE` env var, dispatched in `__main__.py`:
+
 - **INDEX**: `indexer.py` — CSV parsing → embedding generation → ChromaDB storage
 - **PLOT**: `scatter_plot.py` — ChromaDB → StandardScaler → k-means → dimensionality reduction (t-SNE/UMAP/PCA)
 - **SERVER**: `server/app.py` — FastAPI backend serving REST API + built React SPA from `frontend/dist`
@@ -64,6 +68,7 @@ All controlled by `RUNNING_MODE` env var, dispatched in `__main__.py`:
 ### Frontend Structure
 
 React 19 + TypeScript + Vite + Tailwind CSS 4:
+
 - `pages/` — `HomePage`, `IndexPage`, `PlotPage`, `SettingsPage`
 - `components/` — Organized by page: `home/`, `index/`, `plot/`, `csv/`
 - `stores/plotStore.ts` — Zustand store for plot state
@@ -74,6 +79,7 @@ React 19 + TypeScript + Vite + Tailwind CSS 4:
 ## Code Style
 
 ### Python
+
 - **ruff**: line length 90, target py313
 - **mypy strict mode** — all functions need type annotations
 - Use `from __future__ import annotations` in every module
@@ -83,13 +89,18 @@ React 19 + TypeScript + Vite + Tailwind CSS 4:
 - Logger per module: `logger = logging.getLogger(__name__)`
 
 ### Git Conventions
+
 - **Conventional commits** enforced by commitizen: `type(scope): description`
 - Types: `feat`, `fix`, `docs`, `test`, `refactor`
 - **No direct commits to master** (enforced by pre-commit hook)
 - Branch naming: `feature-name` style (e.g., `feat/ollama-provider-integration`)
 
 ### Pre-commit Hooks
-Extensive setup including: ruff, commitizen, yamllint, markdownlint, shellcheck, gitleaks (secret detection), hadolint, check-jsonschema, no-commit-to-branch. Install with:
+
+Extensive setup including: ruff, commitizen, yamllint, markdownlint,
+shellcheck, gitleaks, hadolint, check-jsonschema, no-commit-to-branch.
+Install with:
+
 ```bash
 uv run pre-commit install --install-hooks -t pre-commit -t commit-msg
 ```

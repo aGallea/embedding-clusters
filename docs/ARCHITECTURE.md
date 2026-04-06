@@ -66,6 +66,7 @@ Responsible for the PLOT mode and used by the server's plot route.
 6. Return structured point and cluster data
 
 Additional capabilities:
+
 - **Optimal cluster suggestion** — evaluates k=2..30 with inertia and
   silhouette scores
 - **Sub-clustering** — re-run KMeans within a single cluster or on a
@@ -99,6 +100,7 @@ and the built React SPA.
 ### App Factory (`server/app.py`)
 
 `create_app()` assembles the FastAPI app:
+
 - Registers all API route modules under `/api`
 - Adds CORS middleware for frontend dev server (`localhost:5173`)
 - Serves the React SPA from `frontend/dist` (if built), with catch-all

@@ -148,12 +148,14 @@ test(server): add collection deletion tests
 
 1. Create a branch from `master` (e.g. `feat/my-feature`)
 2. Make your changes and ensure all checks pass:
+
    ```bash
    uv run ruff check embedding_cluster/ tests/
    uv run ruff format --check embedding_cluster/ tests/
    uv run mypy embedding_cluster/
    uv run pytest --cov=embedding_cluster --cov-fail-under=90
    ```
+
 3. Push and open a pull request against `master`
 4. CI will run lint, typecheck, and test jobs automatically
 5. All conversations must be resolved before merging

@@ -75,6 +75,7 @@ uv run pytest tests/test_settings.py::test_function_name -v
 ```
 
 Test configuration is in `pyproject.toml` under `[tool.pytest.ini_options]`:
+
 - `testpaths = ["tests"]`
 - `asyncio_mode = "auto"` (pytest-asyncio auto mode)
 
@@ -105,9 +106,11 @@ cd frontend && npx playwright test e2e/search.spec.ts
 E2E tests require pre-indexed ChromaDB data. The `webServer` config in
 `playwright.config.ts` auto-starts the FastAPI backend. Tests run against
 `http://localhost:8000`.
+
 ## CI
 
 GitHub Actions workflow in `.github/workflows/ci.yml` runs on push/PR:
+
 - **lint** job: `ruff check` + `ruff format --check`
 - **typecheck** job: `mypy embedding_cluster/`
 - **test** job: `pytest --cov` (90% minimum enforced by coverage report)
@@ -117,11 +120,13 @@ All jobs use `uv sync --all-extras` for dependency installation.
 ## Code Style
 
 ### Formatting
+
 - **ruff** with line length **90**, target `py313`
 - Import sorting via ruff's isort rules (`I` select)
 - `embedding_cluster` as known first-party in `[tool.ruff.lint.isort]`
 
 ### Imports
+
 - Standard library first, then third-party, then local (ruff isort enforces this)
 - Third-party imports use direct names: `import chromadb`, `from pydantic import Field`
 - Local imports use full package path: `from embedding_cluster.settings import Settings`
@@ -130,6 +135,7 @@ All jobs use `uv sync --all-extras` for dependency installation.
 - Heavy imports behind `TYPE_CHECKING` blocks where possible
 
 ### Type Hints
+
 - **mypy strict mode** configured in `pyproject.toml`
 - Use modern union syntax: `str | None` (not `Optional[str]`)
 - Use built-in generics: `list[str]`, `dict[str, Any]` (not `List`, `Dict`)
@@ -139,17 +145,20 @@ All jobs use `uv sync --all-extras` for dependency installation.
 - Third-party library stubs are set to `ignore_missing_imports` in mypy overrides
 
 ### Naming Conventions
+
 - **snake_case** for functions, variables, modules
 - **PascalCase** for classes
 - **UPPER_SNAKE_CASE** for environment variable names in Settings field mappings
 - Logger per module: `logger = logging.getLogger(__name__)`
 
 ### Configuration
+
 - All config via **environment variables** parsed by `pydantic-settings` `BaseSettings`
 - Each setting has a `Field()` with `default` and `description`
 - List fields accept JSON-encoded strings from env vars (e.g., `'["field1","field2"]'`)
 
 ### Error Handling
+
 - Use `logging` module (not print statements)
 - Log levels: `logger.info()`, `logger.warning()`, `logger.error()`, `logger.exception()`
 - **Never** use `logger.warn()` (deprecated alias for `warning()`)
@@ -157,6 +166,7 @@ All jobs use `uv sync --all-extras` for dependency installation.
 - Catch specific exceptions, not bare `except:`
 
 ### Async Patterns
+
 - `asyncio.run()` at entry point in `__main__.py`
 - `asyncio.Semaphore` for concurrency limiting
 - `asyncio.ensure_future()` + `asyncio.gather()` for parallel task execution
@@ -164,7 +174,7 @@ All jobs use `uv sync --all-extras` for dependency installation.
 
 ### Project Structure
 
-```
+```text
 embedding_cluster/
   __init__.py          # Empty
   __main__.py          # Entry point, mode dispatch via main()
@@ -206,6 +216,7 @@ tests/
 ### Key Dependencies
 
 Runtime:
+
 - `pydantic` / `pydantic-settings` - Configuration and data models
 - `chromadb` - Vector database for embedding storage
 - `transformers` / `sentence-transformers` - Text and image embedding models
@@ -217,6 +228,7 @@ Runtime:
 - `numpy` / `Pillow` - Numerical and image processing
 
 Dev:
+
 - `pytest` / `pytest-asyncio` / `pytest-cov` - Testing framework
 - `mypy` - Static type checking
 - `ruff` - Linting and formatting
@@ -239,6 +251,7 @@ Dev:
 ## Pre-commit Hooks
 
 Extensive pre-commit setup. Key hooks:
+
 - **ruff** - Python linting (with `--fix`) and formatting
 - **commitizen** - Commit message linting
 - **yamllint** - YAML linting (max line 300)
@@ -260,6 +273,7 @@ Extensive pre-commit setup. Key hooks:
    progress streaming.
 
 Persistent data:
+
 - `./chromadb/` — Vector database (gitignored)
 - `./uploads/` — Uploaded CSV files (gitignored)
 - `./annotations/` — Cluster annotations as JSON sidecar files (gitignored)
